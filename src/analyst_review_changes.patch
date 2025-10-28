@@ -1,0 +1,140 @@
+# Changes needed for AgenticChat.tsx
+
+## 1. Update Conversation interface (around line 208)
+```typescript
+// FROM:
+interface Conversation {
+  id: string;
+  title: string;
+  timestamp: string;
+  messageCount: number;
+  messages: Message[];
+}
+
+// TO:
+interface Conversation {
+  id: string;
+  title: string;
+  timestamp: string;
+  messageCount: number;
+  messages: Message[];
+  status?: 'review-needed' | 'reviewed' | 'in-progress' | 'completed';
+  user?: string;
+  agent?: string;
+}
+```
+
+## 2. Update initial conversations state (around line 304)
+```typescript
+// FROM:
+const [conversations, setConversations] = useState<Conversation[]>([
+  { id: '1', title: 'Q3 Revenue Analysis', timestamp: 'Today', messageCount: 8, messages: [] },
+  { id: '2', title: 'Sales Performance', timestamp: 'Today', messageCount: 5, messages: [] },
+  { id: '3', title: 'Market Analysis', timestamp: 'This Week', messageCount: 12, messages: [] },
+]);
+
+// TO:
+const [conversations, setConversations] = useState<Conversation[]>([
+  { id: '1', title: 'Q3 Revenue Analysis', timestamp: 'Today', messageCount: 8, messages: [], status: 'in-progress', user: user?.email || 'Current User', agent: 'Revenue Analytics Agent' },
+  { id: '2', title: 'Sales Performance', timestamp: 'Today', messageCount: 5, messages: [], status: 'in-progress', user: user?.email || 'Current User', agent: 'Sales Analytics Agent' },
+  { id: '3', title: 'Market Analysis', timestamp: 'This Week', messageCount: 12, messages: [], status: 'review-needed', user: 'Michael Brown', agent: 'Market Analytics Agent' },
+]);
+```
+
+## 3. REMOVE these state variables (around line 320-346)
+```typescript
+// DELETE THESE:
+const [reviewDialogOpen, setReviewDialogOpen] = useState(false);
+const [selectedAnalyst, setSelectedAnalyst] = useState<Analyst | null>(null);
+const [analystEmail, setAnalystEmail] = useState('');
+const [requestingSql, setRequestingSql] = useState<string>('');
+const [generatedSummary, setGeneratedSummary] = useState('');
+const [analystReviewDialogOpen, setAnalystReviewDialogOpen] = useState(false);
+const [reviewData, setReviewData] = useState<{
+  recipientName: string;
+  summary: string;
+  sql: string;
+} | null>(null);
+const [analystDecision, setAnalystDecision] = useState<'approve' | 'reject' | null>(null);
+const [addToGoldenSet, setAddToGoldenSet] = useState(false);
+const [analystNotes, setAnalystNotes] = useState('');
+```
+
+## 4. UPDATE handleRequestReview function (around line 1007)
+```typescript
+// REPLACE ENTIRE FUNCTION:
+const handleRequestReview = () => {
+  // Mark this conversation as needing review
+  const notification: Message = {
+    id: Date.now().toString(),
+    role: 'assistant',
+    content: `**Review request sent to analysts.**\n\nThis conversation has been flagged for analyst review. An analyst will review the SQL queries in this conversation and can add validated queries to the Golden Set.\n\n_You'll be notified when the review is complete._`,
+    timestamp: new Date(),
+  };
+
+  const updatedMessages = [...messages, notification];
+  setMessages(updatedMessages);
+
+  // Update conversation status
+  setConversations(prev => prev.map(c => 
+    c.id === currentConvId 
+      ? { ...c, status: 'review-needed', messages: updatedMessages, messageCount: updatedMessages.length }
+      : c
+  ));
+
+  toast.success('Review request sent to analysts');
+};
+```
+
+## 5. DELETE handleAnalystReviewSubmit function (around line 1047-1100)
+```typescript
+// DELETE THIS ENTIRE FUNCTION
+```
+
+## 6. DELETE handleSaveSql function if it exists
+```typescript
+// DELETE IF EXISTS
+```
+
+## 7. UPDATE SQL artifact button (around line 2441-2466)
+```typescript
+// FIND the button with "Request Analyst Review" and update its onClick:
+
+// FROM:
+onClick={() => {
+  setRequestingSql(artifact.query);
+  setGeneratedSummary(`Please review...`);
+  setReviewDialogOpen(true);
+}}
+
+// TO:
+onClick={handleRequestReview}
+```
+
+## 8. DELETE these dialogs from JSX (around lines 1500-1850)
+- Delete the "Request Review Dialog" (Dialog with "Request Analyst Review" title)
+- Delete the "SQL Edit Dialog"  
+- Delete the "Analyst Review Dialog"
+
+Keep only:
+- Agent Details Dialog
+- The main artifact panel
+
+## 9. REMOVE MOCK_ANALYSTS const (around line 243)
+```typescript
+// DELETE:
+const MOCK_ANALYSTS: Analyst[] = [...];
+```
+
+## 10. REMOVE Analyst interface (around line 216)
+```typescript
+// DELETE:
+interface Analyst {
+  id: string;
+  name: string;
+  specialty: string;
+  available: boolean;
+  avgResponse: string;
+}
+```
+

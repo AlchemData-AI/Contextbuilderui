@@ -14,9 +14,11 @@ import {
   Calendar,
   CheckCircle2,
   AlertCircle,
-  Send
+  Send,
+  Code
 } from 'lucide-react';
 import { toast } from 'sonner@2.0.3';
+import { SqlWorkbench } from '../../components/SqlWorkbench';
 
 interface SampleQuery {
   id: string;

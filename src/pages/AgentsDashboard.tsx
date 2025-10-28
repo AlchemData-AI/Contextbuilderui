@@ -25,13 +25,18 @@ import {
 } from '../components/ui/tooltip';
 import { StatusBadge } from '../components/StatusBadge';
 import { mockAgents, owners, categories, statuses, type Agent } from '../lib/mockData';
+import { useAuthStore, hasPermission } from '../lib/authStore';
 
 export function AgentsDashboard() {
   const navigate = useNavigate();
+  const user = useAuthStore((state) => state.user);
   const [searchQuery, setSearchQuery] = useState('');
   const [ownerFilter, setOwnerFilter] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
+
+  const canCreateAgents = user ? hasPermission(user.role, 'canCreateAgents') : false;
+  const canEditAgents = user ? hasPermission(user.role, 'canEditAgents') : false;
 
   // Filter logic
   const filteredAgents = useMemo(() => {
@@ -64,9 +69,9 @@ export function AgentsDashboard() {
   };
 
   return (
-    <div className="h-full flex flex-col">
+    <div className="h-screen flex flex-col">
       {/* Header */}
-      <div className="bg-white border-b border-[#EEEEEE] px-8 py-6">
+      <div className="bg-white border-b border-[#EEEEEE] px-8 py-6 flex-shrink-0">
         <div className="flex items-center justify-between mb-6">
           <div>
             <h1 className="text-[28px] font-semibold text-[#333333] mb-1">Agents Dashboard</h1>
@@ -74,13 +79,26 @@ export function AgentsDashboard() {
               Manage your Context Agents for the AI Data Scientist
             </p>
           </div>
-          <Button
-            onClick={handleCreateAgent}
-            className="bg-[#00B5B3] hover:bg-[#009999] text-white px-4 py-2 rounded h-9"
-          >
-            <Plus className="w-4 h-4 mr-2" />
-            Create New Agent
-          </Button>
+          <div className="flex items-center gap-2">
+            {canCreateAgents && (
+              <Button
+                onClick={handleCreateAgent}
+                className="bg-[#00B5B3] hover:bg-[#009999] text-white px-4 py-2 rounded h-9"
+              >
+                <Plus className="w-4 h-4 mr-2" />
+                Create New Agent
+              </Button>
+            )}
+            {canEditAgents && (
+              <Button
+                onClick={() => navigate('/configure-golden-queries/1')}
+                variant="outline"
+                className="h-9"
+              >
+                🧪 Test Golden Queries
+              </Button>
+            )}
+          </div>
         </div>
 
         {/* Filters */}

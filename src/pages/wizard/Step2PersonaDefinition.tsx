@@ -9,8 +9,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Label } from '../../components/ui/label';
 import { Badge } from '../../components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../components/ui/tabs';
-import { Users, Upload, FileText, ChevronRight, X, Plus } from 'lucide-react';
+import { Users, Upload, FileText, ChevronRight, X, Plus, Code } from 'lucide-react';
 import { toast } from 'sonner@2.0.3';
+import { SqlWorkbench } from '../../components/SqlWorkbench';
 
 interface GoldenQuery {
   id: string;
@@ -28,6 +29,10 @@ export function Step2PersonaDefinition() {
   const [currentQuery, setCurrentQuery] = useState('');
   const [currentContext, setCurrentContext] = useState('');
   const [importMethod, setImportMethod] = useState<'paste' | 'databricks'>('paste');
+  
+  // SQL Workbench state
+  const [sqlWorkbenchOpen, setSqlWorkbenchOpen] = useState(false);
+  const [editingQueryId, setEditingQueryId] = useState<string | null>(null);
 
   const handleAddQuery = () => {
     if (!currentQuery.trim() || !currentContext.trim()) {
@@ -191,14 +196,21 @@ export function Step2PersonaDefinition() {
                 <TabsContent value="paste" className="space-y-4">
                   <div>
                     <Label htmlFor="query">SQL Query</Label>
-                    <Textarea
-                      id="query"
-                      placeholder="SELECT * FROM orders WHERE created_at > '2024-01-01'"
-                      value={currentQuery}
-                      onChange={(e) => setCurrentQuery(e.target.value)}
-                      rows={4}
-                      className="mt-2 font-mono text-sm resize-none border-2 border-[#DDDDDD] focus:border-[#00B5B3]"
-                    />
+                    <Button
+                      variant="outline"
+                      className="mt-2 w-full justify-start h-auto py-3"
+                      onClick={() => {
+                        setEditingQueryId(null);
+                        setSqlWorkbenchOpen(true);
+                      }}
+                    >
+                      <Code className="w-4 h-4 mr-2" />
+                      {currentQuery ? (
+                        <span className="font-mono text-xs text-left truncate">{currentQuery}</span>
+                      ) : (
+                        <span className="text-[#999999]">Click to write or edit SQL query</span>
+                      )}
+                    </Button>
                   </div>
                   <div>
                     <Label htmlFor="context">Query Context & Purpose</Label>
@@ -238,7 +250,7 @@ export function Step2PersonaDefinition() {
                   </h4>
                   {goldenQueries.map((gq) => (
                     <div key={gq.id} className="border border-[#EEEEEE] rounded-lg p-4">
-                      <div className="flex items-start justify-between gap-3">
+                      <div className="flex items-start justify-between gap-3 mb-3">
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 mb-2">
                             <Badge variant="outline" className="text-xs">
@@ -246,9 +258,6 @@ export function Step2PersonaDefinition() {
                             </Badge>
                             <p className="text-sm text-[#666666]">{gq.context}</p>
                           </div>
-                          <pre className="text-xs font-mono text-[#333333] bg-[#F8F9FA] p-3 rounded overflow-x-auto">
-                            {gq.query}
-                          </pre>
                         </div>
                         <Button
                           variant="ghost"
@@ -259,6 +268,18 @@ export function Step2PersonaDefinition() {
                           <X className="w-4 h-4" />
                         </Button>
                       </div>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="w-full text-xs h-8"
+                        onClick={() => {
+                          setEditingQueryId(gq.id);
+                          setSqlWorkbenchOpen(true);
+                        }}
+                      >
+                        <Code className="w-3 h-3 mr-1" />
+                        View & Edit SQL
+                      </Button>
                     </div>
                   ))}
                 </div>
@@ -270,11 +291,33 @@ export function Step2PersonaDefinition() {
         {/* Continue Button */}
         <div className="flex justify-end">
           <Button onClick={handleContinue} className="bg-[#00B5B3] hover:bg-[#009996]">
-            Continue to Analysis & Validation
+            Continue
             <ChevronRight className="w-4 h-4 ml-2" />
           </Button>
         </div>
       </div>
+
+      {/* SQL Workbench */}
+      <SqlWorkbench
+        open={sqlWorkbenchOpen}
+        onOpenChange={setSqlWorkbenchOpen}
+        initialSql={editingQueryId ? goldenQueries.find((q) => q.id === editingQueryId)?.query || '' : currentQuery}
+        title={editingQueryId ? 'Edit SQL Query' : 'Add SQL Query'}
+        description={editingQueryId ? 'Edit and test your SQL query' : 'Write and test your SQL query'}
+        onSave={(sql) => {
+          if (editingQueryId) {
+            // Update existing query
+            setGoldenQueries((prev) =>
+              prev.map((q) => (q.id === editingQueryId ? { ...q, query: sql } : q))
+            );
+            toast.success('Query updated');
+          } else {
+            // Set current query for new addition
+            setCurrentQuery(sql);
+            toast.success('Query ready to add');
+          }
+        }}
+      />
     </WizardLayout>
   );
 }

@@ -9,6 +9,31 @@ export interface Agent {
   version: string;
   description?: string;
   category: string;
+  tables?: string[]; // e.g., ['ecommerce.orders', 'ecommerce.customers']
+  contextDescription?: string; // What context this agent provides
+  visibility?: 'public' | 'private'; // Public = available to all, Private = only shared users
+  sharedWith?: string[]; // Email addresses of users with access (when private)
+}
+
+export interface Rule {
+  id: string;
+  name: string;
+  owner: string;
+  type: 'cohort' | 'filter' | 'reference' | 'custom';
+  description: string;
+  definition: string; // The actual rule definition (e.g., SQL filter, criteria)
+  createdAt: string;
+  lastUsed?: string;
+  visibility: 'public' | 'private';
+  sharedWith?: string[];
+  metadata?: {
+    team?: string;
+    geography?: string;
+    category?: string;
+    [key: string]: any;
+  };
+  sourceType?: 'manual' | 'chat' | 'onboarding';
+  sourceConversationId?: string; // Link back to chat
 }
 
 export const mockAgents: Agent[] = [
@@ -21,6 +46,10 @@ export const mockAgents: Agent[] = [
     version: 'v2.3',
     description: 'Comprehensive sales data analysis across all channels',
     category: 'Sales',
+    tables: ['ecommerce.orders', 'ecommerce.order_items', 'ecommerce.customers'],
+    contextDescription: 'Revenue metrics, customer segmentation, and sales trends',
+    visibility: 'public',
+    sharedWith: [],
   },
   {
     id: '2',
@@ -31,6 +60,10 @@ export const mockAgents: Agent[] = [
     version: 'v1.8',
     description: 'Real-time inventory tracking and forecasting',
     category: 'Inventory',
+    tables: ['warehouse.inventory'],
+    contextDescription: 'Stock levels, reorder points, and inventory turnover',
+    visibility: 'public',
+    sharedWith: [],
   },
   {
     id: '3',
@@ -41,6 +74,10 @@ export const mockAgents: Agent[] = [
     version: 'v0.5',
     description: 'Customer behavior and funnel analysis',
     category: 'Sales',
+    tables: [],
+    contextDescription: 'Customer lifecycle, conversion funnels, and behavior patterns',
+    visibility: 'private',
+    sharedWith: ['sarah.chen@company.com'],
   },
   {
     id: '4',
@@ -51,6 +88,10 @@ export const mockAgents: Agent[] = [
     version: 'v3.1',
     description: 'Shipping, delivery, and warehouse operations',
     category: 'Logistics',
+    tables: ['logistics.shipments'],
+    contextDescription: 'Delivery performance, carrier metrics, and fulfillment efficiency',
+    visibility: 'public',
+    sharedWith: [],
   },
   {
     id: '5',
@@ -61,6 +102,10 @@ export const mockAgents: Agent[] = [
     version: 'v1.2',
     description: 'Product-level sales and margin analysis',
     category: 'Sales',
+    tables: [],
+    contextDescription: 'Product profitability, return rates, and category performance',
+    visibility: 'private',
+    sharedWith: ['sarah.chen@company.com', 'michael.rodriguez@company.com'],
   },
   {
     id: '6',
@@ -71,6 +116,10 @@ export const mockAgents: Agent[] = [
     version: 'v2.0',
     description: 'Multi-warehouse inventory distribution',
     category: 'Inventory',
+    tables: [],
+    contextDescription: 'Multi-location stock management and distribution patterns',
+    visibility: 'public',
+    sharedWith: [],
   },
   {
     id: '7',
@@ -81,6 +130,10 @@ export const mockAgents: Agent[] = [
     version: 'v0.3',
     description: 'Order processing and fulfillment tracking',
     category: 'Logistics',
+    tables: [],
+    contextDescription: 'Order-to-ship time, fulfillment bottlenecks, and processing efficiency',
+    visibility: 'private',
+    sharedWith: ['james.wilson@company.com'],
   },
   {
     id: '8',
@@ -91,6 +144,10 @@ export const mockAgents: Agent[] = [
     version: 'v1.5',
     description: 'Returns processing and refund analytics',
     category: 'Sales',
+    tables: [],
+    contextDescription: 'Return reasons, refund processing times, and product return rates',
+    visibility: 'public',
+    sharedWith: [],
   },
   {
     id: '9',
@@ -101,6 +158,10 @@ export const mockAgents: Agent[] = [
     version: 'v1.9',
     description: 'Supplier performance and procurement data',
     category: 'Inventory',
+    tables: [],
+    contextDescription: 'Supplier reliability, lead times, and procurement costs',
+    visibility: 'public',
+    sharedWith: [],
   },
   {
     id: '10',
@@ -111,6 +172,91 @@ export const mockAgents: Agent[] = [
     version: 'v2.2',
     description: 'Carrier performance and delivery metrics',
     category: 'Logistics',
+    tables: [],
+    contextDescription: 'On-time delivery rates, carrier costs, and delivery SLAs',
+    visibility: 'public',
+    sharedWith: [],
+  },
+];
+
+export const mockRules: Rule[] = [
+  {
+    id: '1',
+    name: 'West Coast Territory',
+    owner: 'sarah.chen@company.com',
+    type: 'filter',
+    description: 'Sales data for California, Oregon, and Washington states',
+    definition: "state IN ('CA', 'OR', 'WA')",
+    createdAt: '2025-10-15',
+    lastUsed: '2025-10-27',
+    visibility: 'private',
+    sharedWith: ['sarah.chen@company.com'],
+    metadata: {
+      team: 'West Coast Sales',
+      geography: 'US West',
+      category: 'Territory',
+    },
+  },
+  {
+    id: '2',
+    name: 'High-Value Customers',
+    owner: 'sarah.chen@company.com',
+    type: 'cohort',
+    description: 'Customers with lifetime value > $10,000',
+    definition: "total_purchase_value > 10000",
+    createdAt: '2025-10-18',
+    lastUsed: '2025-10-28',
+    visibility: 'public',
+    sharedWith: [],
+    metadata: {
+      category: 'Customer Segment',
+    },
+  },
+  {
+    id: '3',
+    name: 'Q4 2024 Holiday Season',
+    owner: 'mike.rodriguez@company.com',
+    type: 'reference',
+    description: 'Date range for Q4 2024 holiday shopping period',
+    definition: "order_date BETWEEN '2024-11-01' AND '2024-12-31'",
+    createdAt: '2025-09-20',
+    lastUsed: '2025-10-25',
+    visibility: 'public',
+    sharedWith: [],
+    metadata: {
+      category: 'Time Period',
+    },
+  },
+  {
+    id: '4',
+    name: 'Electronics Category',
+    owner: 'james.wilson@company.com',
+    type: 'filter',
+    description: 'All electronics products including phones, laptops, tablets',
+    definition: "product_category IN ('Electronics', 'Phones', 'Laptops', 'Tablets')",
+    createdAt: '2025-10-10',
+    visibility: 'public',
+    sharedWith: [],
+    metadata: {
+      category: 'Product',
+    },
+  },
+  {
+    id: '5',
+    name: 'My Team - East Region',
+    owner: 'emma.taylor@company.com',
+    type: 'reference',
+    description: 'Sales representatives in the East region team',
+    definition: "sales_rep_id IN (101, 102, 103, 105, 108)",
+    createdAt: '2025-10-05',
+    lastUsed: '2025-10-26',
+    visibility: 'private',
+    sharedWith: ['emma.taylor@company.com', 'sarah.chen@company.com'],
+    metadata: {
+      team: 'East Region Sales',
+      geography: 'US East',
+      category: 'Team',
+    },
   },
 ];
 
@@ -382,3 +528,15 @@ export const mockQuestions: Question[] = [
     answered: false,
   },
 ];
+
+// Agent Review Submissions - Simple table for tracking AI chat reviews
+export interface AgentReview {
+  id: string;
+  agentId: string;
+  conversationId: string;
+  aiSummary: string;
+  createdAt: string;
+  status: 'pending' | 'approved' | 'rejected';
+}
+
+export const mockAgentReviews: AgentReview[] = [];

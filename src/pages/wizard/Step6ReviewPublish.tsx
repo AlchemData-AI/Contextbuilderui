@@ -8,6 +8,7 @@ import { Textarea } from '../../components/ui/textarea';
 import { Label } from '../../components/ui/label';
 import { Badge } from '../../components/ui/badge';
 import { Separator } from '../../components/ui/separator';
+import { RadioGroup, RadioGroupItem } from '../../components/ui/radio-group';
 import { 
   Database, 
   Users, 
@@ -15,7 +16,11 @@ import {
   TrendingUp, 
   MessageSquare,
   CheckCircle2,
-  Rocket
+  Rocket,
+  Globe,
+  Lock,
+  Mail,
+  X
 } from 'lucide-react';
 import { toast } from 'sonner@2.0.3';
 
@@ -24,10 +29,43 @@ export function Step6ReviewPublish() {
   const [agentName, setAgentName] = useState('Sales Analytics Agent');
   const [agentDescription, setAgentDescription] = useState('Analyzes sales performance, inventory trends, and customer behavior');
   const [isPublishing, setIsPublishing] = useState(false);
+  const [visibility, setVisibility] = useState<'public' | 'private'>('public');
+  const [sharedEmails, setSharedEmails] = useState<string[]>([]);
+  const [newEmail, setNewEmail] = useState('');
+
+  const handleAddEmail = () => {
+    if (!newEmail.trim()) {
+      return;
+    }
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(newEmail)) {
+      toast.error('Please enter a valid email address');
+      return;
+    }
+
+    if (sharedEmails.includes(newEmail.toLowerCase())) {
+      toast.error('This email is already added');
+      return;
+    }
+
+    setSharedEmails([...sharedEmails, newEmail.toLowerCase()]);
+    setNewEmail('');
+    toast.success('Email added');
+  };
+
+  const handleRemoveEmail = (email: string) => {
+    setSharedEmails(sharedEmails.filter(e => e !== email));
+  };
 
   const handlePublish = async () => {
     if (!agentName.trim()) {
       toast.error('Please provide an agent name');
+      return;
+    }
+
+    if (visibility === 'private' && sharedEmails.length === 0) {
+      toast.error('Please add at least one email for private agents');
       return;
     }
 
@@ -164,6 +202,103 @@ export function Step6ReviewPublish() {
               </div>
             </div>
           </div>
+        </Card>
+
+        {/* Sharing Settings */}
+        <Card className="p-6 border-2 border-[#EEEEEE]">
+          <h3 className="font-semibold text-[#333333] mb-4">Sharing Settings</h3>
+          
+          <RadioGroup value={visibility} onValueChange={(value: 'public' | 'private') => setVisibility(value)}>
+            <div className="space-y-3">
+              <div className="flex items-start gap-3 p-4 border-2 border-[#DDDDDD] rounded-lg hover:border-[#00B5B3] transition-colors cursor-pointer" onClick={() => setVisibility('public')}>
+                <RadioGroupItem value="public" id="public" className="mt-0.5" />
+                <div className="flex-1">
+                  <div className="flex items-center gap-2 mb-1">
+                    <Globe className="w-4 h-4 text-[#00B5B3]" />
+                    <Label htmlFor="public" className="font-medium text-[#333333] cursor-pointer">
+                      Public
+                    </Label>
+                  </div>
+                  <p className="text-sm text-[#666666]">
+                    Available to everyone in your organization
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-start gap-3 p-4 border-2 border-[#DDDDDD] rounded-lg hover:border-[#00B5B3] transition-colors cursor-pointer" onClick={() => setVisibility('private')}>
+                <RadioGroupItem value="private" id="private" className="mt-0.5" />
+                <div className="flex-1">
+                  <div className="flex items-center gap-2 mb-1">
+                    <Lock className="w-4 h-4 text-[#00B5B3]" />
+                    <Label htmlFor="private" className="font-medium text-[#333333] cursor-pointer">
+                      Private
+                    </Label>
+                  </div>
+                  <p className="text-sm text-[#666666]">
+                    Share with specific people by email
+                  </p>
+                </div>
+              </div>
+            </div>
+          </RadioGroup>
+
+          {/* Private Sharing Section */}
+          {visibility === 'private' && (
+            <div className="mt-4 p-4 bg-[#F5F5F5] rounded-lg">
+              <Label className="text-sm font-medium text-[#333333] mb-3 block">
+                Share with specific people
+              </Label>
+              
+              <div className="flex gap-2 mb-3">
+                <div className="relative flex-1">
+                  <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-[#999999]" />
+                  <Input
+                    type="email"
+                    value={newEmail}
+                    onChange={(e) => setNewEmail(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        handleAddEmail();
+                      }
+                    }}
+                    placeholder="Enter email address"
+                    className="pl-10 border-2 border-[#DDDDDD] focus:border-[#00B5B3] h-10"
+                  />
+                </div>
+                <Button
+                  type="button"
+                  onClick={handleAddEmail}
+                  variant="outline"
+                  className="border-2 border-[#00B5B3] text-[#00B5B3] hover:bg-[#E6F7F7]"
+                >
+                  Add
+                </Button>
+              </div>
+
+              {sharedEmails.length > 0 && (
+                <div className="space-y-2">
+                  <p className="text-xs text-[#666666] mb-2">
+                    {sharedEmails.length} {sharedEmails.length === 1 ? 'person' : 'people'} will have access
+                  </p>
+                  {sharedEmails.map((email) => (
+                    <div key={email} className="flex items-center justify-between p-2 bg-white rounded border border-[#EEEEEE]">
+                      <div className="flex items-center gap-2">
+                        <Mail className="w-3.5 h-3.5 text-[#666666]" />
+                        <span className="text-sm text-[#333333]">{email}</span>
+                      </div>
+                      <button
+                        onClick={() => handleRemoveEmail(email)}
+                        className="text-[#999999] hover:text-[#FF4444] transition-colors"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         </Card>
 
         {/* Publish */}

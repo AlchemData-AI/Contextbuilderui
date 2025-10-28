@@ -5,7 +5,7 @@ import { Button } from '../components/ui/button';
 import { Badge } from '../components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
 import { Separator } from '../components/ui/separator';
-import { ScrollArea } from '../components/ui/scroll-area';
+import { Textarea } from '../components/ui/textarea';
 import {
   ArrowLeft,
   Database,
@@ -20,7 +20,6 @@ import {
   Edit,
   Copy,
   Trash2,
-  PlayCircle,
   PauseCircle,
   Plus,
   Link2,
@@ -28,6 +27,11 @@ import {
   Zap,
   Sparkles,
   X,
+  Share2,
+  UserPlus,
+  Mail,
+  Globe,
+  Lock,
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -36,7 +40,25 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '../components/ui/dropdown-menu';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '../components/ui/dialog';
+import { Input } from '../components/ui/input';
+import { Label } from '../components/ui/label';
+import { RadioGroup, RadioGroupItem } from '../components/ui/radio-group';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '../components/ui/select';
 import { toast } from 'sonner@2.0.3';
+import { useAuthStore, hasPermission } from '../lib/authStore';
 
 interface SampleQuery {
   id: string;
@@ -257,18 +279,58 @@ const MOCK_CONNECTIONS: AgentConnection[] = [
 ];
 */
 
+interface SharedUser {
+  id: string;
+  name: string;
+  email: string;
+  role: 'owner' | 'editor' | 'viewer';
+  addedAt: string;
+}
+
+const MOCK_SHARED_USERS: SharedUser[] = [
+  {
+    id: '1',
+    name: 'Sarah Johnson',
+    email: 'sarah.johnson@company.com',
+    role: 'owner',
+    addedAt: '2024-10-15',
+  },
+  {
+    id: '2',
+    name: 'Mike Chen',
+    email: 'mike.chen@company.com',
+    role: 'editor',
+    addedAt: '2024-10-18',
+  },
+  {
+    id: '3',
+    name: 'Emily Davis',
+    email: 'emily.davis@company.com',
+    role: 'viewer',
+    addedAt: '2024-10-20',
+  },
+];
+
 export function AgentDetails() {
   const { agentId } = useParams();
   const navigate = useNavigate();
+  const user = useAuthStore((state) => state.user);
   const [activeTab, setActiveTab] = useState('overview');
   const [hasRelationships] = useState(MOCK_CONNECTIONS.length > 0);
   const [showRelationshipBanner, setShowRelationshipBanner] = useState(!MOCK_CONNECTIONS.length);
+  const [showShareDialog, setShowShareDialog] = useState(false);
+  const [sharedUsers, setSharedUsers] = useState<SharedUser[]>(MOCK_SHARED_USERS);
+  const [newUserEmail, setNewUserEmail] = useState('');
+  const [newUserRole, setNewUserRole] = useState<'editor' | 'viewer'>('viewer');
+  const [agentVisibility, setAgentVisibility] = useState<'public' | 'private'>('public');
+
+  const canEditAgents = user ? hasPermission(user.role, 'canEditAgents') : false;
+  const canDeleteAgents = user ? hasPermission(user.role, 'canDeleteAgents') : false;
+  
+
 
   const handleAction = (action: string) => {
     switch (action) {
-      case 'edit':
-        toast.success('Edit functionality coming soon');
-        break;
       case 'duplicate':
         toast.success('Agent duplicated');
         break;
@@ -281,8 +343,48 @@ export function AgentDetails() {
     }
   };
 
+
+
+  const handleAddUser = () => {
+    if (!newUserEmail.trim()) {
+      toast.error('Please enter an email address');
+      return;
+    }
+
+    // Check if user already has access
+    if (sharedUsers.some(u => u.email.toLowerCase() === newUserEmail.toLowerCase())) {
+      toast.error('User already has access to this agent');
+      return;
+    }
+
+    const newUser: SharedUser = {
+      id: Date.now().toString(),
+      name: newUserEmail.split('@')[0].replace('.', ' '),
+      email: newUserEmail,
+      role: newUserRole,
+      addedAt: new Date().toISOString().split('T')[0],
+    };
+
+    setSharedUsers([...sharedUsers, newUser]);
+    setNewUserEmail('');
+    setNewUserRole('viewer');
+    toast.success(`Shared with ${newUserEmail}`);
+  };
+
+  const handleRemoveUser = (userId: string) => {
+    setSharedUsers(sharedUsers.filter(u => u.id !== userId));
+    toast.success('Access removed');
+  };
+
+  const handleChangeRole = (userId: string, newRole: 'editor' | 'viewer') => {
+    setSharedUsers(sharedUsers.map(u => 
+      u.id === userId ? { ...u, role: newRole } : u
+    ));
+    toast.success('Role updated');
+  };
+
   return (
-    <div className="h-full flex flex-col bg-[#FAFBFC]">
+    <div className="h-screen flex flex-col bg-[#FAFBFC]">
       {/* Relationship Setup Banner */}
       {showRelationshipBanner && (
         <div className="bg-gradient-to-r from-[#F79009] to-[#F79009]/80 px-8 py-4 border-b-2 border-[#F79009]">
@@ -331,7 +433,7 @@ export function AgentDetails() {
             >
               <ArrowLeft className="w-4 h-4" />
             </Button>
-            <div>
+            <div className="flex-1">
               <div className="flex items-center gap-3 mb-2">
                 <h1 className="text-2xl font-semibold text-[#333333]">{MOCK_AGENT.name}</h1>
                 <Badge className="bg-[#00B98E] text-white">
@@ -351,36 +453,54 @@ export function AgentDetails() {
           </div>
 
           <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm">
-              <PlayCircle className="w-4 h-4 mr-2" />
-              Test Agent
+            {canEditAgents && (
+              <Button 
+                size="sm"
+                onClick={() => navigate(`/agents/${agentId}/edit/step-1`)}
+                className="bg-[#00B5B3] hover:bg-[#009996] text-white"
+              >
+                <Edit className="w-4 h-4 mr-2" />
+                Edit Agent
+              </Button>
+            )}
+            <Button 
+              variant="outline" 
+              size="sm"
+              onClick={() => setShowShareDialog(true)}
+            >
+              <Share2 className="w-4 h-4 mr-2" />
+              Share
             </Button>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="sm">
-                  <MoreHorizontal className="w-4 h-4" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem onClick={() => handleAction('edit')}>
-                  <Edit className="w-4 h-4 mr-2" />
-                  Edit Configuration
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => handleAction('duplicate')}>
-                  <Copy className="w-4 h-4 mr-2" />
-                  Duplicate Agent
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => handleAction('pause')}>
-                  <PauseCircle className="w-4 h-4 mr-2" />
-                  Pause Agent
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={() => handleAction('delete')} className="text-[#F04438]">
-                  <Trash2 className="w-4 h-4 mr-2" />
-                  Delete Agent
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+            {(canEditAgents || canDeleteAgents) && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="sm">
+                    <MoreHorizontal className="w-4 h-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  {canEditAgents && (
+                    <>
+                      <DropdownMenuItem onClick={() => handleAction('duplicate')}>
+                        <Copy className="w-4 h-4 mr-2" />
+                        Duplicate Agent
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => handleAction('pause')}>
+                        <PauseCircle className="w-4 h-4 mr-2" />
+                        Pause Agent
+                      </DropdownMenuItem>
+                    </>
+                  )}
+                  {canEditAgents && canDeleteAgents && <DropdownMenuSeparator />}
+                  {canDeleteAgents && (
+                    <DropdownMenuItem onClick={() => handleAction('delete')} className="text-[#F04438]">
+                      <Trash2 className="w-4 h-4 mr-2" />
+                      Delete Agent
+                    </DropdownMenuItem>
+                  )}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
           </div>
         </div>
 
@@ -405,20 +525,44 @@ export function AgentDetails() {
       </div>
 
       {/* Tabs */}
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col overflow-hidden">
         <div className="bg-white border-b border-[#EEEEEE] px-8">
           <TabsList className="bg-transparent h-12">
-            <TabsTrigger value="overview" className="text-sm">Overview</TabsTrigger>
-            <TabsTrigger value="queries" className="text-sm">Golden Queries</TabsTrigger>
-            <TabsTrigger value="connected-agents" className="text-sm">Connected Agents</TabsTrigger>
-            <TabsTrigger value="configuration" className="text-sm">Configuration</TabsTrigger>
-            <TabsTrigger value="conversations" className="text-sm">User Conversations</TabsTrigger>
+            <TabsTrigger 
+              value="overview" 
+              className="text-sm data-[state=active]:text-[#00B5B3] data-[state=active]:border-b-2 data-[state=active]:border-[#00B5B3]"
+            >
+              Overview
+            </TabsTrigger>
+            <TabsTrigger 
+              value="queries" 
+              className="text-sm data-[state=active]:text-[#00B5B3] data-[state=active]:border-b-2 data-[state=active]:border-[#00B5B3]"
+            >
+              Golden Queries
+            </TabsTrigger>
+            <TabsTrigger 
+              value="connected-agents" 
+              className="text-sm data-[state=active]:text-[#00B5B3] data-[state=active]:border-b-2 data-[state=active]:border-[#00B5B3]"
+            >
+              Connected Agents
+            </TabsTrigger>
+            <TabsTrigger 
+              value="configuration" 
+              className="text-sm data-[state=active]:text-[#00B5B3] data-[state=active]:border-b-2 data-[state=active]:border-[#00B5B3]"
+            >
+              Configuration
+            </TabsTrigger>
+            <TabsTrigger 
+              value="conversations" 
+              className="text-sm data-[state=active]:text-[#00B5B3] data-[state=active]:border-b-2 data-[state=active]:border-[#00B5B3]"
+            >
+              User Conversations
+            </TabsTrigger>
           </TabsList>
         </div>
 
-        <ScrollArea className="flex-1 px-8 py-6">
           {/* Overview Tab */}
-          <TabsContent value="overview" className="mt-0 space-y-6">
+          <TabsContent value="overview" className="mt-0 space-y-6 flex-1 overflow-y-auto px-8 py-6">
             {/* Metrics */}
             <div>
               <h3 className="text-sm font-semibold text-[#333333] mb-4">Key Metrics</h3>
@@ -496,7 +640,7 @@ export function AgentDetails() {
           </TabsContent>
 
           {/* Connected Agents Tab */}
-          <TabsContent value="connected-agents" className="mt-0 space-y-6">
+          <TabsContent value="connected-agents" className="mt-0 space-y-6 flex-1 overflow-y-auto px-8 py-6">
             {/* Header */}
             <Card className="p-5 border border-[#E0F7F7] bg-[#F0FFFE]">
               <div className="flex items-start gap-3">
@@ -648,7 +792,7 @@ export function AgentDetails() {
           </TabsContent>
 
           {/* Golden Queries Tab */}
-          <TabsContent value="queries" className="mt-0 space-y-4">
+          <TabsContent value="queries" className="mt-0 space-y-4 flex-1 overflow-y-auto px-8 py-6">
             <div className="flex items-center justify-between mb-4">
               <div>
                 <h3 className="text-sm font-semibold text-[#333333] mb-1">Golden Queries</h3>
@@ -691,14 +835,10 @@ export function AgentDetails() {
           </TabsContent>
 
           {/* Configuration Tab */}
-          <TabsContent value="configuration" className="mt-0 space-y-6">
+          <TabsContent value="configuration" className="mt-0 space-y-6 flex-1 overflow-y-auto px-8 py-6">
             <Card className="p-5 border border-[#EEEEEE]">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-sm font-semibold text-[#333333]">Agent Configuration</h3>
-                <Button size="sm" variant="outline">
-                  <Edit className="w-3 h-3 mr-2" />
-                  Edit
-                </Button>
               </div>
 
               <div className="space-y-4">
@@ -747,7 +887,7 @@ export function AgentDetails() {
           </TabsContent>
 
           {/* User Conversations Tab */}
-          <TabsContent value="conversations" className="mt-0 space-y-4">
+          <TabsContent value="conversations" className="mt-0 space-y-4 flex-1 overflow-y-auto px-8 py-6">
             <div className="flex items-center justify-between mb-4">
               <div>
                 <h3 className="text-sm font-semibold text-[#333333] mb-1">User Conversations</h3>
@@ -802,8 +942,207 @@ export function AgentDetails() {
               </Card>
             ))}
           </TabsContent>
-        </ScrollArea>
       </Tabs>
+
+      {/* Share Dialog */}
+      <Dialog open={showShareDialog} onOpenChange={setShowShareDialog}>
+        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Share Agent</DialogTitle>
+            <DialogDescription>
+              Give others in your organization access to this agent
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-6 py-4">
+            {/* Visibility Settings */}
+            <div className="p-4 bg-[#F8F9FA] rounded-lg border border-[#EEEEEE]">
+              <div className="flex items-center gap-2 mb-3">
+                <Share2 className="w-4 h-4 text-[#00B5B3]" />
+                <h4 className="text-sm font-semibold text-[#333333]">Visibility</h4>
+              </div>
+
+              <RadioGroup value={agentVisibility} onValueChange={(value: 'public' | 'private') => setAgentVisibility(value)}>
+                <div className="space-y-2">
+                  <div className="flex items-start gap-3 p-3 border border-[#DDDDDD] rounded-lg hover:border-[#00B5B3] transition-colors cursor-pointer" onClick={() => setAgentVisibility('public')}>
+                    <RadioGroupItem value="public" id="visibility-public" className="mt-0.5" />
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-1">
+                        <Globe className="w-3.5 h-3.5 text-[#00B5B3]" />
+                        <Label htmlFor="visibility-public" className="text-sm font-medium text-[#333333] cursor-pointer">
+                          Public
+                        </Label>
+                      </div>
+                      <p className="text-xs text-[#666666]">
+                        Available to everyone in your organization
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-start gap-3 p-3 border border-[#DDDDDD] rounded-lg hover:border-[#00B5B3] transition-colors cursor-pointer" onClick={() => setAgentVisibility('private')}>
+                    <RadioGroupItem value="private" id="visibility-private" className="mt-0.5" />
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-1">
+                        <Lock className="w-3.5 h-3.5 text-[#00B5B3]" />
+                        <Label htmlFor="visibility-private" className="text-sm font-medium text-[#333333] cursor-pointer">
+                          Private
+                        </Label>
+                      </div>
+                      <p className="text-xs text-[#666666]">
+                        Only shared with specific people below
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </RadioGroup>
+            </div>
+
+            {/* Add New User */}
+            {agentVisibility === 'private' && (
+              <div className="p-4 bg-[#F8F9FA] rounded-lg border border-[#EEEEEE]">
+                <div className="flex items-center gap-2 mb-3">
+                  <UserPlus className="w-4 h-4 text-[#00B5B3]" />
+                  <h4 className="text-sm font-semibold text-[#333333]">Add People</h4>
+                </div>
+              
+              <div className="space-y-3">
+                <div>
+                  <Label className="text-xs font-medium text-[#666666] mb-2">Email Address</Label>
+                  <div className="flex gap-2">
+                    <div className="flex-1 relative">
+                      <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#999999]" />
+                      <Input
+                        type="email"
+                        placeholder="colleague@company.com"
+                        value={newUserEmail}
+                        onChange={(e) => setNewUserEmail(e.target.value)}
+                        onKeyPress={(e) => {
+                          if (e.key === 'Enter') {
+                            handleAddUser();
+                          }
+                        }}
+                        className="pl-10"
+                      />
+                    </div>
+                    <Select value={newUserRole} onValueChange={(v: any) => setNewUserRole(v)}>
+                      <SelectTrigger className="w-[140px]">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="viewer">
+                          <div>
+                            <p className="text-sm font-medium">Viewer</p>
+                            <p className="text-xs text-[#666666]">Can view only</p>
+                          </div>
+                        </SelectItem>
+                        <SelectItem value="editor">
+                          <div>
+                            <p className="text-sm font-medium">Editor</p>
+                            <p className="text-xs text-[#666666]">Can edit agent</p>
+                          </div>
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <Button 
+                      onClick={handleAddUser}
+                      className="bg-[#00B5B3] hover:bg-[#009996]"
+                    >
+                      Add
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            </div>
+            )}
+
+            {/* Current Access */}
+            {agentVisibility === 'private' && (
+              <div>
+              <div className="flex items-center gap-2 mb-3">
+                <Users className="w-4 h-4 text-[#00B5B3]" />
+                <h4 className="text-sm font-semibold text-[#333333]">
+                  People with Access ({sharedUsers.length})
+                </h4>
+              </div>
+
+              <div className="space-y-2">
+                {sharedUsers.map((user) => (
+                  <Card key={user.id} className="p-3 border border-[#EEEEEE]">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-full bg-[#E0F7F7] flex items-center justify-center">
+                          <span className="text-xs font-semibold text-[#00B5B3]">
+                            {user.name.split(' ').map(n => n[0]).join('').toUpperCase()}
+                          </span>
+                        </div>
+                        <div>
+                          <p className="text-sm font-medium text-[#333333]">{user.name}</p>
+                          <p className="text-xs text-[#666666]">{user.email}</p>
+                        </div>
+                      </div>
+                      
+                      <div className="flex items-center gap-2">
+                        {user.role === 'owner' ? (
+                          <Badge variant="outline" className="text-xs">
+                            Owner
+                          </Badge>
+                        ) : (
+                          <>
+                            <Select
+                              value={user.role}
+                              onValueChange={(v: any) => handleChangeRole(user.id, v)}
+                            >
+                              <SelectTrigger className="w-[110px] h-8 text-xs">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="viewer">Viewer</SelectItem>
+                                <SelectItem value="editor">Editor</SelectItem>
+                              </SelectContent>
+                            </Select>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => handleRemoveUser(user.id)}
+                              className="h-8 w-8 p-0"
+                            >
+                              <X className="w-4 h-4 text-[#666666]" />
+                            </Button>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  </Card>
+                ))}
+              </div>
+            </div>
+            )}
+
+            {/* Info */}
+            {agentVisibility === 'private' && (
+              <div className="p-3 bg-[#F0FFFE] rounded border border-[#E0F7F7]">
+                <div className="flex items-start gap-2">
+                  <Sparkles className="w-4 h-4 text-[#00B5B3] mt-0.5" />
+                  <div>
+                    <p className="text-xs font-medium text-[#333333] mb-1">Permission Levels</p>
+                    <ul className="text-xs text-[#666666] space-y-1">
+                      <li>• <strong>Viewer:</strong> Can view agent details and query results</li>
+                      <li>• <strong>Editor:</strong> Can modify agent configuration and relationships</li>
+                      <li>• <strong>Owner:</strong> Full control including sharing and deletion</li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={() => setShowShareDialog(false)}>
+              Done
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

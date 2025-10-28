@@ -26,8 +26,10 @@ import {
   Edit,
   ChevronRight,
   PlayCircle,
+  Code,
 } from 'lucide-react';
 import { toast } from 'sonner@2.0.3';
+import { SqlWorkbench } from '../../components/SqlWorkbench';
 
 interface GoldenQuery {
   id: string;
@@ -139,9 +141,29 @@ export function Step8GoldenQueries() {
   const [newMetricName, setNewMetricName] = useState('');
   const [newMetricDesc, setNewMetricDesc] = useState('');
 
+  // SQL Workbench state
+  const [sqlWorkbenchOpen, setSqlWorkbenchOpen] = useState(false);
+  const [sqlWorkbenchContent, setSqlWorkbenchContent] = useState('');
+  const [sqlWorkbenchTitle, setSqlWorkbenchTitle] = useState('SQL Workbench');
+  const [sqlWorkbenchCallback, setSqlWorkbenchCallback] = useState<((sql: string) => void) | null>(null);
+
   const approvedQueriesCount = queries.filter((q) => q.status === 'approved').length;
   const approvedMetricsCount = metrics.filter((m) => m.status === 'approved').length;
   const hasApprovedAny = approvedQueriesCount > 0 || approvedMetricsCount > 0;
+
+  // SQL Workbench handlers
+  const openSqlWorkbench = (sql: string, title: string, onSave: (sql: string) => void) => {
+    setSqlWorkbenchContent(sql);
+    setSqlWorkbenchTitle(title);
+    setSqlWorkbenchCallback(() => onSave);
+    setSqlWorkbenchOpen(true);
+  };
+
+  const handleSqlWorkbenchSave = (sql: string) => {
+    if (sqlWorkbenchCallback) {
+      sqlWorkbenchCallback(sql);
+    }
+  };
 
   const handleApproveQuery = (id: string) => {
     setQueries((prev) =>
@@ -328,14 +350,21 @@ export function Step8GoldenQueries() {
                         <p className="text-xs text-[#333333]">{query.answer}</p>
                       </div>
 
-                      <details className="text-xs mb-3">
-                        <summary className="cursor-pointer text-[#666666] hover:text-[#00B5B3] mb-2 font-medium">
-                          View SQL Query
-                        </summary>
-                        <pre className="bg-[#F8F9FA] p-3 rounded font-mono text-[10px] text-[#333333] overflow-x-auto border border-[#EEEEEE]">
-                          {query.sqlQuery}
-                        </pre>
-                      </details>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="mb-3 text-xs h-7"
+                        onClick={() =>
+                          openSqlWorkbench(query.sqlQuery, `SQL: ${query.question}`, (updatedSql) => {
+                            setQueries((prev) =>
+                              prev.map((q) => (q.id === query.id ? { ...q, sqlQuery: updatedSql } : q))
+                            );
+                          })
+                        }
+                      >
+                        <Code className="w-3 h-3 mr-1" />
+                        View & Edit SQL
+                      </Button>
 
                       <div className="flex items-center gap-2">
                         <Button
@@ -370,8 +399,8 @@ export function Step8GoldenQueries() {
                   </div>
                   {approvedQueries.map((query) => (
                     <Card key={query.id} className="p-3 border border-[#00B98E] bg-[#F0FFF9]">
-                      <div className="flex items-center justify-between">
-                        <p className="text-sm text-[#333333]">{query.question}</p>
+                      <div className="flex items-center justify-between mb-2">
+                        <p className="text-sm text-[#333333] flex-1">{query.question}</p>
                         <Button
                           size="sm"
                           variant="ghost"
@@ -384,6 +413,21 @@ export function Step8GoldenQueries() {
                           <XCircle className="w-3 h-3" />
                         </Button>
                       </div>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="text-xs h-6 w-full"
+                        onClick={() =>
+                          openSqlWorkbench(query.sqlQuery, `SQL: ${query.question}`, (updatedSql) => {
+                            setQueries((prev) =>
+                              prev.map((q) => (q.id === query.id ? { ...q, sqlQuery: updatedSql } : q))
+                            );
+                          })
+                        }
+                      >
+                        <Code className="w-3 h-3 mr-1" />
+                        View SQL
+                      </Button>
                     </Card>
                   ))}
                 </div>
@@ -461,14 +505,21 @@ export function Step8GoldenQueries() {
                         <Badge variant="outline" className="text-[10px]">AI Generated</Badge>
                       </div>
 
-                      <details className="text-xs mb-3">
-                        <summary className="cursor-pointer text-[#666666] hover:text-[#00B5B3] mb-2 font-medium">
-                          View SQL Query
-                        </summary>
-                        <pre className="bg-[#F8F9FA] p-3 rounded font-mono text-[10px] text-[#333333] overflow-x-auto border border-[#EEEEEE]">
-                          {metric.sqlQuery}
-                        </pre>
-                      </details>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="mb-3 text-xs h-7"
+                        onClick={() =>
+                          openSqlWorkbench(metric.sqlQuery, `SQL: ${metric.name}`, (updatedSql) => {
+                            setMetrics((prev) =>
+                              prev.map((m) => (m.id === metric.id ? { ...m, sqlQuery: updatedSql } : m))
+                            );
+                          })
+                        }
+                      >
+                        <Code className="w-3 h-3 mr-1" />
+                        View & Edit SQL
+                      </Button>
 
                       <div className="flex items-center gap-2">
                         <Button

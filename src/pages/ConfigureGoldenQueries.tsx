@@ -28,8 +28,14 @@ import {
   Send,
   Edit3,
   Link2,
+  Users,
+  Clock,
+  ThumbsUp,
+  ThumbsDown,
+  Code,
 } from 'lucide-react';
 import { toast } from 'sonner@2.0.3';
+import { SqlWorkbench } from '../components/SqlWorkbench';
 
 interface GoldenQuery {
   id: string;
@@ -51,6 +57,23 @@ interface GoldenMetric {
   status: 'pending' | 'approved' | 'rejected' | 'needs_revision';
   conversation: { role: 'ai' | 'user'; message: string; timestamp: Date }[];
   isAiGenerated: boolean;
+}
+
+interface NewQuery {
+  id: string;
+  question: string;
+  sqlQuery: string;
+  usageCount: number;
+  lastUsed: string;
+  userFeedback: { positive: number; negative: number };
+  conversations: {
+    userId: string;
+    userName: string;
+    timestamp: string;
+    question: string;
+    answer: string;
+  }[];
+  involvedAgents: string[];
 }
 
 const AI_PROPOSED_QUERIES: GoldenQuery[] = [
@@ -119,6 +142,131 @@ WHERE shipped_at IS NOT NULL`,
   },
 ];
 
+// New queries discovered from user conversations
+const NEW_QUERIES_FROM_CONVERSATIONS: NewQuery[] = [
+  {
+    id: 'new-1',
+    question: 'Show me products with declining sales in the last 3 months',
+    sqlQuery: `SELECT 
+  p.name,
+  p.category,
+  SUM(CASE WHEN o.created_at >= CURRENT_DATE - INTERVAL '1 month' THEN oi.quantity ELSE 0 END) as last_month,
+  SUM(CASE WHEN o.created_at >= CURRENT_DATE - INTERVAL '2 month' AND o.created_at < CURRENT_DATE - INTERVAL '1 month' THEN oi.quantity ELSE 0 END) as prev_month,
+  SUM(CASE WHEN o.created_at >= CURRENT_DATE - INTERVAL '3 month' AND o.created_at < CURRENT_DATE - INTERVAL '2 month' THEN oi.quantity ELSE 0 END) as two_months_ago
+FROM products p
+JOIN order_items oi ON p.id = oi.product_id
+JOIN orders o ON oi.order_id = o.id
+WHERE o.created_at >= CURRENT_DATE - INTERVAL '3 month'
+GROUP BY p.id, p.name, p.category
+HAVING SUM(CASE WHEN o.created_at >= CURRENT_DATE - INTERVAL '1 month' THEN oi.quantity ELSE 0 END) < 
+       SUM(CASE WHEN o.created_at >= CURRENT_DATE - INTERVAL '2 month' AND o.created_at < CURRENT_DATE - INTERVAL '1 month' THEN oi.quantity ELSE 0 END)
+ORDER BY (last_month - prev_month) ASC`,
+    usageCount: 12,
+    lastUsed: '2 hours ago',
+    userFeedback: { positive: 9, negative: 1 },
+    conversations: [
+      {
+        userId: 'u1',
+        userName: 'Sarah Chen',
+        timestamp: '2024-10-27 09:15 AM',
+        question: 'Show me products with declining sales in the last 3 months',
+        answer: 'Found 23 products with declining sales trends. Top declining: Widget Pro (-45%), Smart Device X (-32%), Premium Tool (-28%).',
+      },
+      {
+        userId: 'u2',
+        userName: 'Mike Johnson',
+        timestamp: '2024-10-27 11:30 AM',
+        question: 'Which products are selling less this month?',
+        answer: '23 products showing sales decline this month compared to previous months.',
+      },
+      {
+        userId: 'u3',
+        userName: 'Emma Davis',
+        timestamp: '2024-10-27 02:45 PM',
+        question: 'Show declining product performance',
+        answer: 'Identified 23 products with declining sales trends over the past 3 months.',
+      },
+    ],
+    involvedAgents: ['Sales Analytics', 'Inventory Management'],
+  },
+  {
+    id: 'new-2',
+    question: 'What is the average time between customer orders?',
+    sqlQuery: `WITH order_intervals AS (
+  SELECT 
+    customer_id,
+    created_at,
+    LAG(created_at) OVER (PARTITION BY customer_id ORDER BY created_at) as prev_order_date,
+    EXTRACT(EPOCH FROM (created_at - LAG(created_at) OVER (PARTITION BY customer_id ORDER BY created_at)))/86400 as days_between
+  FROM orders
+)
+SELECT 
+  AVG(days_between) as avg_days_between_orders,
+  PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY days_between) as median_days,
+  COUNT(*) as total_repeat_orders
+FROM order_intervals
+WHERE days_between IS NOT NULL`,
+    usageCount: 8,
+    lastUsed: '5 hours ago',
+    userFeedback: { positive: 7, negative: 0 },
+    conversations: [
+      {
+        userId: 'u4',
+        userName: 'James Wilson',
+        timestamp: '2024-10-27 08:00 AM',
+        question: 'What is the average time between customer orders?',
+        answer: 'Average time between orders is 28.5 days. Median is 21 days. This indicates customers typically reorder within 3-4 weeks.',
+      },
+      {
+        userId: 'u1',
+        userName: 'Sarah Chen',
+        timestamp: '2024-10-27 10:20 AM',
+        question: 'How often do customers come back to order?',
+        answer: 'Customers reorder on average every 28.5 days, with most returning within 21 days.',
+      },
+    ],
+    involvedAgents: ['Sales Analytics', 'Customer Insights'],
+  },
+  {
+    id: 'new-3',
+    question: 'Show me shipments delayed by more than 3 days',
+    sqlQuery: `SELECT 
+  s.id as shipment_id,
+  o.order_id,
+  c.name as customer_name,
+  s.carrier,
+  o.created_at as order_date,
+  s.estimated_delivery,
+  s.actual_delivery,
+  EXTRACT(EPOCH FROM (s.actual_delivery - s.estimated_delivery))/86400 as days_delayed
+FROM shipments s
+JOIN orders o ON s.order_id = o.id
+JOIN customers c ON o.customer_id = c.id
+WHERE s.actual_delivery > s.estimated_delivery + INTERVAL '3 days'
+ORDER BY days_delayed DESC`,
+    usageCount: 15,
+    lastUsed: '1 hour ago',
+    userFeedback: { positive: 12, negative: 2 },
+    conversations: [
+      {
+        userId: 'u5',
+        userName: 'Lisa Anderson',
+        timestamp: '2024-10-27 01:30 PM',
+        question: 'Show me shipments delayed by more than 3 days',
+        answer: 'Found 47 shipments delayed by 3+ days. Average delay: 4.8 days. Most affected carrier: FastShip (23 delays).',
+      },
+      {
+        userId: 'u2',
+        userName: 'Mike Johnson',
+        timestamp: '2024-10-27 03:15 PM',
+        question: 'Which deliveries are significantly late?',
+        answer: '47 shipments are delayed by more than 3 days from their estimated delivery date.',
+      },
+    ],
+    involvedAgents: ['Sales Analytics', 'Logistics Agent'],
+  },
+];
+
 const AI_PROPOSED_METRICS: GoldenMetric[] = [
   {
     id: '1',
@@ -176,15 +324,26 @@ export function ConfigureGoldenQueries() {
   const { agentId } = useParams();
   const [queries, setQueries] = useState<GoldenQuery[]>(AI_PROPOSED_QUERIES);
   const [metrics, setMetrics] = useState<GoldenMetric[]>(AI_PROPOSED_METRICS);
+  const [newQueries, setNewQueries] = useState<NewQuery[]>(NEW_QUERIES_FROM_CONVERSATIONS);
   const [showAddQueryDialog, setShowAddQueryDialog] = useState(false);
   const [showAddMetricDialog, setShowAddMetricDialog] = useState(false);
   const [revisionMessage, setRevisionMessage] = useState('');
   const [selectedQueryForRevision, setSelectedQueryForRevision] = useState<string | null>(null);
   const [selectedMetricForRevision, setSelectedMetricForRevision] = useState<string | null>(null);
+  const [selectedNewQuery, setSelectedNewQuery] = useState<NewQuery | null>(null);
+  const [showConversationsDialog, setShowConversationsDialog] = useState(false);
+  const [editingNewQuerySQL, setEditingNewQuerySQL] = useState<string | null>(null);
+  const [editedSQL, setEditedSQL] = useState('');
 
   const [newQuestion, setNewQuestion] = useState('');
   const [newMetricName, setNewMetricName] = useState('');
   const [newMetricDesc, setNewMetricDesc] = useState('');
+
+  // SQL Workbench state
+  const [sqlWorkbenchOpen, setSqlWorkbenchOpen] = useState(false);
+  const [sqlWorkbenchContent, setSqlWorkbenchContent] = useState('');
+  const [sqlWorkbenchTitle, setSqlWorkbenchTitle] = useState('SQL Workbench');
+  const [sqlWorkbenchCallback, setSqlWorkbenchCallback] = useState<((sql: string) => void) | null>(null);
 
   const approvedQueriesCount = queries.filter((q) => q.status === 'approved').length;
   const approvedMetricsCount = metrics.filter((m) => m.status === 'approved').length;
@@ -194,6 +353,20 @@ export function ConfigureGoldenQueries() {
   const approvedQueries = queries.filter((q) => q.status === 'approved');
   const pendingMetrics = metrics.filter((m) => m.status === 'pending' || m.status === 'needs_revision');
   const approvedMetrics = metrics.filter((m) => m.status === 'approved');
+
+  // SQL Workbench handlers
+  const openSqlWorkbench = (sql: string, title: string, onSave: (sql: string) => void) => {
+    setSqlWorkbenchContent(sql);
+    setSqlWorkbenchTitle(title);
+    setSqlWorkbenchCallback(() => onSave);
+    setSqlWorkbenchOpen(true);
+  };
+
+  const handleSqlWorkbenchSave = (sql: string) => {
+    if (sqlWorkbenchCallback) {
+      sqlWorkbenchCallback(sql);
+    }
+  };
 
   const handleRequestQueryRevision = (id: string) => {
     if (!revisionMessage.trim()) {
@@ -265,6 +438,32 @@ export function ConfigureGoldenQueries() {
     toast.success('Revision request sent');
   };
 
+  const handleAddNewQueryToGolden = (newQuery: NewQuery, useEditedSQL = false) => {
+    const sqlToUse = useEditedSQL && editedSQL ? editedSQL : newQuery.sqlQuery;
+    
+    const goldenQuery: GoldenQuery = {
+      id: `from-conv-${newQuery.id}`,
+      question: newQuery.question,
+      answer: 'Answer will be generated from validated SQL',
+      sqlQuery: sqlToUse,
+      involvedAgents: newQuery.involvedAgents,
+      status: 'approved',
+      conversation: [],
+      isAiGenerated: false,
+    };
+    
+    setQueries((prev) => [...prev, goldenQuery]);
+    setNewQueries((prev) => prev.filter((q) => q.id !== newQuery.id));
+    setEditingNewQuerySQL(null);
+    setEditedSQL('');
+    toast.success('Query added to golden set');
+  };
+
+  const handleRejectNewQuery = (queryId: string) => {
+    setNewQueries((prev) => prev.filter((q) => q.id !== queryId));
+    toast.success('Query dismissed');
+  };
+
   const handleFinish = () => {
     if (!hasApprovedAny) {
       toast.error('Please approve at least one query or metric');
@@ -289,6 +488,7 @@ export function ConfigureGoldenQueries() {
           <div className="flex items-center gap-3">
             <span className="text-xs text-[#666666]">
               {approvedQueriesCount} queries, {approvedMetricsCount} metrics
+              {newQueries.length > 0 && ` • ${newQueries.length} pending review`}
             </span>
             <Button
               variant="outline"
@@ -433,14 +633,21 @@ export function ConfigureGoldenQueries() {
                     <p className="text-xs text-[#333333] line-clamp-3">{query.answer}</p>
                   </div>
 
-                  <details className="text-xs mb-3">
-                    <summary className="cursor-pointer text-[#666666] hover:text-[#00B5B3] mb-2 font-medium">
-                      View SQL Query
-                    </summary>
-                    <pre className="bg-[#F8F9FA] p-3 rounded font-mono text-[10px] text-[#333333] overflow-x-auto border border-[#EEEEEE]">
-                      {query.sqlQuery}
-                    </pre>
-                  </details>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="mb-3 text-xs h-7"
+                    onClick={() =>
+                      openSqlWorkbench(query.sqlQuery, `SQL: ${query.question}`, (updatedSql) => {
+                        setQueries((prev) =>
+                          prev.map((q) => (q.id === query.id ? { ...q, sqlQuery: updatedSql } : q))
+                        );
+                      })
+                    }
+                  >
+                    <Code className="w-3 h-3 mr-1" />
+                    View & Edit SQL
+                  </Button>
 
                   {/* Conversation */}
                   {query.conversation.length > 0 && (
@@ -531,7 +738,7 @@ export function ConfigureGoldenQueries() {
                 <div className="grid grid-cols-2 gap-3">
                   {approvedQueries.map((query) => (
                     <Card key={query.id} className="p-3 border border-[#00B98E] bg-[#F0FFF9]">
-                      <div className="flex items-start justify-between">
+                      <div className="flex items-start justify-between mb-2">
                         <div className="flex-1">
                           <p className="text-sm text-[#333333] mb-2">{query.question}</p>
                           <div className="flex items-center gap-1.5 flex-wrap">
@@ -554,12 +761,235 @@ export function ConfigureGoldenQueries() {
                           <XCircle className="w-3 h-3" />
                         </Button>
                       </div>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="text-xs h-6 w-full"
+                        onClick={() =>
+                          openSqlWorkbench(query.sqlQuery, `SQL: ${query.question}`, (updatedSql) => {
+                            setQueries((prev) =>
+                              prev.map((q) => (q.id === query.id ? { ...q, sqlQuery: updatedSql } : q))
+                            );
+                          })
+                        }
+                      >
+                        <Code className="w-3 h-3 mr-1" />
+                        View SQL
+                      </Button>
                     </Card>
                   ))}
                 </div>
               </div>
             )}
           </div>
+
+          {/* New Queries from Conversations Section */}
+          {newQueries.length > 0 && (
+            <div>
+              <Card className="p-4 border-2 border-[#6366F1] bg-[#F5F5FF] mb-4">
+                <div className="flex items-start gap-3">
+                  <div className="w-10 h-10 rounded-lg bg-white shadow-sm flex items-center justify-center flex-shrink-0">
+                    <Users className="w-5 h-5 text-[#6366F1]" />
+                  </div>
+                  <div className="flex-1">
+                    <h3 className="font-semibold text-[#333333] mb-1">
+                      New Queries from User Conversations ({newQueries.length})
+                    </h3>
+                    <p className="text-xs text-[#666666]">
+                      These queries were generated by your AI agent during user conversations but aren't part of the golden query set yet. 
+                      Review usage patterns and validate to add them to your golden set.
+                    </p>
+                  </div>
+                </div>
+              </Card>
+
+              <div className="grid grid-cols-2 gap-4">
+                {newQueries.map((newQuery) => (
+                  <Card key={newQuery.id} className="p-4 flex flex-col border-2 border-[#6366F1]">
+                    <div className="flex items-start justify-between mb-3">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 mb-2">
+                          <Badge className="bg-[#6366F1] text-white text-xs">
+                            From Conversations
+                          </Badge>
+                          <Badge variant="outline" className="text-xs">
+                            {newQuery.usageCount} uses
+                          </Badge>
+                        </div>
+                        <h4 className="text-sm font-semibold text-[#333333] mb-2">{newQuery.question}</h4>
+                      </div>
+                    </div>
+
+                    {/* Involved Agents */}
+                    <div className="mb-3 flex items-center gap-1.5 flex-wrap">
+                      <Link2 className="w-3.5 h-3.5 text-[#666666]" />
+                      {newQuery.involvedAgents.map((agent, idx) => (
+                        <Badge key={idx} variant="outline" className="text-xs">
+                          {agent}
+                        </Badge>
+                      ))}
+                    </div>
+
+                    {/* Usage Stats */}
+                    <div className="grid grid-cols-2 gap-3 mb-3">
+                      <div className="bg-white rounded p-2 border border-[#EEEEEE]">
+                        <div className="flex items-center gap-1.5 mb-1">
+                          <Clock className="w-3 h-3 text-[#666666]" />
+                          <span className="text-xs text-[#666666]">Last Used</span>
+                        </div>
+                        <p className="text-xs font-medium text-[#333333]">{newQuery.lastUsed}</p>
+                      </div>
+                      <div className="bg-white rounded p-2 border border-[#EEEEEE]">
+                        <div className="flex items-center gap-2 mb-1">
+                          <div className="flex items-center gap-0.5">
+                            <ThumbsUp className="w-3 h-3 text-[#00B98E]" />
+                            <span className="text-xs font-medium text-[#00B98E]">{newQuery.userFeedback.positive}</span>
+                          </div>
+                          <div className="flex items-center gap-0.5">
+                            <ThumbsDown className="w-3 h-3 text-[#F04438]" />
+                            <span className="text-xs font-medium text-[#F04438]">{newQuery.userFeedback.negative}</span>
+                          </div>
+                        </div>
+                        <p className="text-xs text-[#666666]">User Feedback</p>
+                      </div>
+                    </div>
+
+                    {/* Conversations Button */}
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="mb-3 text-xs h-8"
+                      onClick={() => {
+                        setSelectedNewQuery(newQuery);
+                        setShowConversationsDialog(true);
+                      }}
+                    >
+                      <MessageSquare className="w-3 h-3 mr-1.5" />
+                      View {newQuery.conversations.length} Conversation{newQuery.conversations.length !== 1 ? 's' : ''}
+                    </Button>
+
+                    {/* SQL Query */}
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="mb-3 text-xs h-7 w-full"
+                      onClick={() =>
+                        openSqlWorkbench(newQuery.sqlQuery, `SQL: ${newQuery.question}`, (updatedSql) => {
+                          setNewQueries((prev) =>
+                            prev.map((nq) => (nq.id === newQuery.id ? { ...nq, sqlQuery: updatedSql } : nq))
+                          );
+                        })
+                      }
+                    >
+                      <Code className="w-3 h-3 mr-1" />
+                      View & Edit SQL
+                    </Button>
+
+                    {/* Action Buttons */}
+                    <div className="flex items-center gap-2 mt-auto pt-3 border-t border-[#EEEEEE]">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="flex-1 text-xs"
+                        onClick={() => handleRejectNewQuery(newQuery.id)}
+                      >
+                        <XCircle className="w-3 h-3 mr-1" />
+                        Dismiss
+                      </Button>
+                      <Button
+                        size="sm"
+                        className="flex-1 bg-[#6366F1] hover:bg-[#5558E3] text-white text-xs"
+                        onClick={() => handleAddNewQueryToGolden(newQuery, editingNewQuerySQL === newQuery.id)}
+                      >
+                        <Plus className="w-3 h-3 mr-1" />
+                        Add to Golden Set
+                      </Button>
+                    </div>
+                  </Card>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Conversations Dialog */}
+          <Dialog open={showConversationsDialog} onOpenChange={setShowConversationsDialog}>
+            <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
+              <DialogHeader>
+                <DialogTitle>User Conversations</DialogTitle>
+                <DialogDescription>
+                  {selectedNewQuery && `Review how users asked "${selectedNewQuery.question}"`}
+                </DialogDescription>
+              </DialogHeader>
+              {selectedNewQuery && (
+                <div className="space-y-4 py-4">
+                  <div className="bg-[#F8F9FA] p-4 rounded border border-[#EEEEEE]">
+                    <div className="flex items-center justify-between mb-3">
+                      <h4 className="text-sm font-semibold text-[#333333]">Usage Summary</h4>
+                      <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-1">
+                          <ThumbsUp className="w-4 h-4 text-[#00B98E]" />
+                          <span className="text-sm font-medium text-[#00B98E]">{selectedNewQuery.userFeedback.positive}</span>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <ThumbsDown className="w-4 h-4 text-[#F04438]" />
+                          <span className="text-sm font-medium text-[#F04438]">{selectedNewQuery.userFeedback.negative}</span>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-3 gap-4 text-xs">
+                      <div>
+                        <span className="text-[#666666]">Total Uses:</span>
+                        <span className="ml-2 font-medium text-[#333333]">{selectedNewQuery.usageCount}</span>
+                      </div>
+                      <div>
+                        <span className="text-[#666666]">Last Used:</span>
+                        <span className="ml-2 font-medium text-[#333333]">{selectedNewQuery.lastUsed}</span>
+                      </div>
+                      <div>
+                        <span className="text-[#666666]">Success Rate:</span>
+                        <span className="ml-2 font-medium text-[#00B98E]">
+                          {Math.round((selectedNewQuery.userFeedback.positive / selectedNewQuery.usageCount) * 100)}%
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="space-y-3">
+                    <h4 className="text-sm font-semibold text-[#333333]">
+                      Conversation History ({selectedNewQuery.conversations.length})
+                    </h4>
+                    {selectedNewQuery.conversations.map((conv, idx) => (
+                      <Card key={idx} className="p-4 border border-[#EEEEEE]">
+                        <div className="flex items-start justify-between mb-3">
+                          <div className="flex items-center gap-2">
+                            <div className="w-8 h-8 rounded-full bg-[#E0F7F7] flex items-center justify-center">
+                              <span className="text-xs font-medium text-[#00B5B3]">
+                                {conv.userName.split(' ').map(n => n[0]).join('')}
+                              </span>
+                            </div>
+                            <div>
+                              <p className="text-sm font-medium text-[#333333]">{conv.userName}</p>
+                              <p className="text-xs text-[#666666]">{conv.timestamp}</p>
+                            </div>
+                          </div>
+                        </div>
+                        <div className="space-y-2">
+                          <div className="bg-white p-3 rounded border border-[#EEEEEE]">
+                            <p className="text-xs text-[#666666] mb-1">Question:</p>
+                            <p className="text-sm text-[#333333]">{conv.question}</p>
+                          </div>
+                          <div className="bg-[#F0FFFE] p-3 rounded border border-[#E0F7F7]">
+                            <p className="text-xs text-[#666666] mb-1">AI Answer:</p>
+                            <p className="text-sm text-[#333333]">{conv.answer}</p>
+                          </div>
+                        </div>
+                      </Card>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </DialogContent>
+          </Dialog>
 
           {/* Golden Metrics Section */}
           <div>
@@ -675,14 +1105,21 @@ export function ConfigureGoldenQueries() {
                     ))}
                   </div>
 
-                  <details className="text-xs mb-3">
-                    <summary className="cursor-pointer text-[#666666] hover:text-[#00B5B3] mb-2 font-medium">
-                      View SQL Query
-                    </summary>
-                    <pre className="bg-[#F8F9FA] p-3 rounded font-mono text-[10px] text-[#333333] overflow-x-auto border border-[#EEEEEE]">
-                      {metric.sqlQuery}
-                    </pre>
-                  </details>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="mb-3 text-xs h-7"
+                    onClick={() =>
+                      openSqlWorkbench(metric.sqlQuery, `SQL: ${metric.name}`, (updatedSql) => {
+                        setMetrics((prev) =>
+                          prev.map((m) => (m.id === metric.id ? { ...m, sqlQuery: updatedSql } : m))
+                        );
+                      })
+                    }
+                  >
+                    <Code className="w-3 h-3 mr-1" />
+                    View & Edit SQL
+                  </Button>
 
                   {/* Conversation */}
                   {metric.conversation.length > 0 && (
@@ -773,7 +1210,7 @@ export function ConfigureGoldenQueries() {
                 <div className="grid grid-cols-2 gap-3">
                   {approvedMetrics.map((metric) => (
                     <Card key={metric.id} className="p-3 border border-[#00B98E] bg-[#F0FFF9]">
-                      <div className="flex items-start justify-between">
+                      <div className="flex items-start justify-between mb-2">
                         <div className="flex-1">
                           <p className="text-sm font-medium text-[#333333] mb-1">{metric.name}</p>
                           <p className="text-xs text-[#666666] mb-2">{metric.description}</p>
@@ -797,6 +1234,21 @@ export function ConfigureGoldenQueries() {
                           <XCircle className="w-3 h-3" />
                         </Button>
                       </div>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="text-xs h-6 w-full"
+                        onClick={() =>
+                          openSqlWorkbench(metric.sqlQuery, `SQL: ${metric.name}`, (updatedSql) => {
+                            setMetrics((prev) =>
+                              prev.map((m) => (m.id === metric.id ? { ...m, sqlQuery: updatedSql } : m))
+                            );
+                          })
+                        }
+                      >
+                        <Code className="w-3 h-3 mr-1" />
+                        View SQL
+                      </Button>
                     </Card>
                   ))}
                 </div>
@@ -805,6 +1257,15 @@ export function ConfigureGoldenQueries() {
           </div>
         </div>
       </ScrollArea>
+
+      {/* SQL Workbench */}
+      <SqlWorkbench
+        open={sqlWorkbenchOpen}
+        onOpenChange={setSqlWorkbenchOpen}
+        initialSql={sqlWorkbenchContent}
+        title={sqlWorkbenchTitle}
+        onSave={handleSqlWorkbenchSave}
+      />
     </div>
   );
 }

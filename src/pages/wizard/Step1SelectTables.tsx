@@ -9,7 +9,7 @@ import { Badge } from '../../components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '../../components/ui/dialog';
 import { RadioGroup, RadioGroupItem } from '../../components/ui/radio-group';
 import { Label } from '../../components/ui/label';
-import { Search, Database, ChevronRight, Sparkles, Info, FileStack, GitBranch, Plus } from 'lucide-react';
+import { Search, Database, ChevronRight, Sparkles, Info, FileStack, GitBranch, Plus, Loader2 } from 'lucide-react';
 import { toast } from 'sonner@2.0.3';
 import { mockAgents } from '../../lib/mockData';
 
@@ -183,6 +183,8 @@ export function Step1SelectTables() {
   const [tableContextChoices, setTableContextChoices] = useState<Map<string, TableContextChoice>>(new Map());
   const [agentCreationType, setAgentCreationType] = useState<'extend' | 'new' | null>(null);
   const [suggestedAgent, setSuggestedAgent] = useState<any>(null);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
   
   // Pre-fill data in edit mode
   useEffect(() => {
@@ -195,11 +197,17 @@ export function Step1SelectTables() {
     }
   }, [isEditMode, agentId]);
 
-  const handleGenerateSuggestions = () => {
+  const handleGenerateSuggestions = async () => {
     if (!agentGoal.trim()) {
       toast.error('Please describe what you want to analyze');
       return;
     }
+    
+    // Start analyzing animation
+    setIsAnalyzing(true);
+    
+    // Simulate AI processing time (1.5-2 seconds)
+    await new Promise((resolve) => setTimeout(resolve, 1500 + Math.random() * 500));
     
     // Find matching agents based on description
     const contextLower = agentGoal.toLowerCase();
@@ -229,6 +237,8 @@ export function Step1SelectTables() {
       setShowTables(true);
       toast.success('AI suggested tables based on your goal');
     }
+    
+    setIsAnalyzing(false);
   };
 
   const handleBuildOnExisting = () => {
@@ -301,6 +311,8 @@ export function Step1SelectTables() {
       return;
     }
     
+    setIsLoading(true);
+    
     // Save table selections and context choices
     const tableContextChoicesObj = Object.fromEntries(tableContextChoices);
     localStorage.setItem('wizardData', JSON.stringify({ 
@@ -315,8 +327,10 @@ export function Step1SelectTables() {
       ? `/agents/${agentId}/edit/step-2`
       : '/agents/create/step-2';
     
-    toast.success(`${selectedTables.size} tables selected`);
-    navigate(nextPath);
+    setTimeout(() => {
+      toast.success(`${selectedTables.size} tables selected`);
+      navigate(nextPath);
+    }, 600);
   };
 
   const filteredManualTables = MOCK_ALL_TABLES.filter(
@@ -355,35 +369,76 @@ export function Step1SelectTables() {
         )}
         
         {/* Search Intent */}
-        <Card className="p-6 border-2 border-[#00B5B3] bg-[#F0FFFE]">
-          <div className="space-y-4">
-            <div className="flex items-start gap-3">
-              <div className="w-10 h-10 rounded-lg bg-white shadow-sm flex items-center justify-center flex-shrink-0">
+        {!showTables && !showAgentSuggestion ? (
+          <Card className="p-8 border border-[#EEEEEE] bg-white">
+            <div className="max-w-3xl">
+              <div className="flex items-center gap-2 mb-2">
                 <Sparkles className="w-5 h-5 text-[#00B5B3]" />
+                <h3 className="text-[#333333]">What do you want to analyze?</h3>
               </div>
-              <div className="flex-1">
-                <h3 className="font-semibold text-[#333333] mb-2">What do you want to analyze?</h3>
-                <p className="text-sm text-[#666666] mb-4">
-                  Describe your analysis goal and we'll suggest the most relevant tables from your data warehouse.
-                </p>
-                <div className="space-y-3">
-                  <div className="relative">
-                    <Input
-                      placeholder="e.g., Analyze sales performance and inventory trends across regions"
-                      value={agentGoal}
-                      onChange={(e) => setAgentGoal(e.target.value)}
-                      className="h-12 pl-4 pr-4 bg-white border-2 border-[#DDDDDD] focus:border-[#00B5B3] transition-colors text-[15px]"
-                    />
-                  </div>
-                  <Button onClick={handleGenerateSuggestions} className="bg-[#00B5B3] hover:bg-[#009996] h-11">
-                    <Sparkles className="w-4 h-4 mr-2" />
-                    Generate Table Suggestions
+              <p className="text-sm text-[#666666] mb-6">
+                Describe your analysis goal and we'll suggest the most relevant tables from your data warehouse.
+              </p>
+              <div className="space-y-3">
+                <Input
+                  placeholder="e.g., Analyze sales performance and inventory trends across regions"
+                  value={agentGoal}
+                  onChange={(e) => setAgentGoal(e.target.value)}
+                  disabled={isAnalyzing}
+                  className="h-12 bg-white border border-[#DDDDDD] focus:border-[#00B5B3] transition-colors disabled:opacity-50"
+                />
+                <div className="flex items-center gap-3">
+                  <Button 
+                    onClick={handleGenerateSuggestions} 
+                    disabled={isAnalyzing}
+                    className="bg-[#00B5B3] hover:bg-[#009996] disabled:opacity-70"
+                  >
+                    {isAnalyzing ? (
+                      <>
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        Analyzing...
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles className="w-4 h-4 mr-2" />
+                        Generate Table Suggestions
+                      </>
+                    )}
                   </Button>
+                  {isAnalyzing && (
+                    <span className="text-sm text-[#999999]">
+                      Searching for relevant tables and checking for existing agents...
+                    </span>
+                  )}
                 </div>
               </div>
             </div>
-          </div>
-        </Card>
+          </Card>
+        ) : (
+          <Card className="px-6 py-4 border border-[#EEEEEE] bg-[#FAFBFC]">
+            <div className="flex items-center justify-between gap-4">
+              <div className="flex items-start gap-3 flex-1 min-w-0">
+                <Sparkles className="w-4 h-4 text-[#00B5B3] flex-shrink-0 mt-0.5" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs text-[#999999] mb-0.5">Analysis goal</p>
+                  <p className="text-sm text-[#333333]">{agentGoal}</p>
+                </div>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setShowTables(false);
+                  setShowAgentSuggestion(false);
+                  setSuggestedAgent(null);
+                }}
+                className="border-[#DDDDDD] hover:bg-white flex-shrink-0"
+              >
+                Change
+              </Button>
+            </div>
+          </Card>
+        )}
 
         {/* Agent Suggestion - Shows FIRST if match found */}
         {showAgentSuggestion && suggestedAgent && (
@@ -588,31 +643,8 @@ export function Step1SelectTables() {
           </div>
         )}
 
-        {/* Selected Tables Summary */}
-        {selectedTables.size > 0 && (
-          <Card className="p-6 bg-[#F0FFFE] border-2 border-[#00B5B3]">
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="font-semibold text-[#333333] mb-1">
-                  {selectedTables.size} Table{selectedTables.size !== 1 ? 's' : ''} Selected
-                </h3>
-                <p className="text-sm text-[#666666]">
-                  {Array.from(selectedTables)
-                    .map((id) => {
-                      const table = MOCK_ALL_TABLES.find((t) => t.id === id);
-                      return table ? `${table.schema}.${table.name}` : '';
-                    })
-                    .filter(Boolean)
-                    .join(', ')}
-                </p>
-              </div>
-              <Button onClick={handleContinue} className="bg-[#00B5B3] hover:bg-[#009996] h-11">
-                Continue to Persona Definition
-                <ChevronRight className="w-4 h-4 ml-2" />
-              </Button>
-            </div>
-          </Card>
-        )}
+        {/* Spacer for fixed footer */}
+        {selectedTables.size > 0 && <div className="h-24" />}
 
         {/* Table Context Choice Dialog */}
         <Dialog open={contextDialogOpen} onOpenChange={setContextDialogOpen}>
@@ -682,6 +714,48 @@ export function Step1SelectTables() {
           </DialogContent>
         </Dialog>
       </div>
+      
+      {/* Selected Tables Summary - Fixed Footer (positioned relative to content area, not full viewport) */}
+      {selectedTables.size > 0 && (
+        <div className="fixed bottom-0 left-[280px] right-0 bg-white border-t border-[#EEEEEE] shadow-[0_-2px_8px_rgba(0,0,0,0.04)] z-40">
+          <div className="max-w-5xl mx-auto px-8 py-4">
+            <div className="flex items-center justify-between gap-6">
+              <div className="flex items-center gap-4">
+                <div className="flex items-center gap-2">
+                  <div className="w-6 h-6 rounded-full bg-[#00B5B3] text-white flex items-center justify-center text-xs">
+                    {selectedTables.size}
+                  </div>
+                  <span className="text-sm text-[#666666]">
+                    {selectedTables.size} table{selectedTables.size !== 1 ? 's' : ''} selected
+                  </span>
+                </div>
+                <span className="text-xs text-[#999999] max-w-md truncate">
+                  {Array.from(selectedTables)
+                    .map((id) => {
+                      const table = MOCK_ALL_TABLES.find((t) => t.id === id);
+                      return table ? `${table.schema}.${table.name}` : '';
+                    })
+                    .filter(Boolean)
+                    .join(', ')}
+                </span>
+              </div>
+              <Button onClick={handleContinue} className="bg-[#00B5B3] hover:bg-[#009996]" disabled={isLoading}>
+                {isLoading ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Loading...
+                  </>
+                ) : (
+                  <>
+                    Continue
+                    <ChevronRight className="w-4 h-4 ml-2" />
+                  </>
+                )}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </WizardLayout>
   );
 }

@@ -73,17 +73,17 @@ export function Step6ReviewPublish() {
     
     // Simulate publishing
     setTimeout(() => {
-      // Navigate to success screen
-      navigate('/publish-success');
+      // Navigate to step 8 - Agent Relationships (Advanced)
+      navigate('/agents/create/step-8');
     }, 2000);
   };
 
   return (
     <WizardLayout
-      currentStep={6}
-      totalSteps={6}
+      currentStep={7}
+      totalSteps={7}
       title="Review & Publish"
-      onBack={() => navigate('/agents/create/step-5')}
+      onBack={() => navigate('/agents/create/step-6')}
       onSaveDraft={() => {
         localStorage.setItem('wizardDraft', JSON.stringify({ 
           step: 6, 
@@ -301,7 +301,7 @@ export function Step6ReviewPublish() {
           )}
         </Card>
 
-        {/* Publish */}
+        {/* Ready to Publish Banner */}
         <Card className="p-6 bg-[#F0FFFE] border-2 border-[#00B5B3]">
           <div className="flex items-start gap-4">
             <div className="w-12 h-12 rounded-lg bg-[#00B5B3] flex items-center justify-center flex-shrink-0">
@@ -309,26 +309,46 @@ export function Step6ReviewPublish() {
             </div>
             <div className="flex-1">
               <h3 className="font-semibold text-[#333333] mb-2">Ready to Publish</h3>
-              <p className="text-sm text-[#666666] mb-4">
-                Your agent is configured and ready to use. Click "Publish Agent" to make it available to your team.
+              <p className="text-sm text-[#666666]">
+                Your agent is configured and ready to use. Review the configuration above and click "Publish Agent" below to make it available.
               </p>
-              <Button
-                onClick={handlePublish}
-                disabled={isPublishing}
-                className="bg-[#00B5B3] hover:bg-[#009996] h-11"
-              >
-                {isPublishing ? (
-                  <>Publishing...</>
-                ) : (
-                  <>
-                    <Rocket className="w-4 h-4 mr-2" />
-                    Publish Agent
-                  </>
-                )}
-              </Button>
             </div>
           </div>
         </Card>
+
+        {/* Spacer for fixed footer */}
+        <div className="h-24" />
+      </div>
+
+      {/* Footer - Always show with publish button */}
+      <div className="fixed bottom-0 left-[280px] right-0 bg-white border-t border-[#EEEEEE] shadow-[0_-2px_8px_rgba(0,0,0,0.04)] z-40">
+        <div className="max-w-5xl mx-auto px-8 py-4">
+          <div className="flex items-center justify-between gap-6">
+            <div className="flex items-center gap-4">
+              <Badge variant="outline" className="bg-[#E8F5E9] text-[#4CAF50] border-[#4CAF50]">
+                <CheckCircle2 className="w-3 h-3 mr-1" />
+                Configuration complete
+              </Badge>
+              <span className="text-sm text-[#666666]">
+                {visibility === 'public' ? 'Public agent' : `Private - ${sharedEmails.length} ${sharedEmails.length === 1 ? 'person' : 'people'}`}
+              </span>
+            </div>
+            <Button
+              onClick={handlePublish}
+              disabled={isPublishing || !agentName.trim() || (visibility === 'private' && sharedEmails.length === 0)}
+              className="bg-[#00B5B3] hover:bg-[#009996]"
+            >
+              {isPublishing ? (
+                <>Publishing...</>
+              ) : (
+                <>
+                  <Rocket className="w-4 h-4 mr-2" />
+                  Publish Agent
+                </>
+              )}
+            </Button>
+          </div>
+        </div>
       </div>
     </WizardLayout>
   );

@@ -15,8 +15,10 @@ import { Step1SelectTables } from './pages/wizard/Step1SelectTables';
 import { Step2PersonaDefinition } from './pages/wizard/Step2PersonaDefinition';
 import { Step3RunAnalysis } from './pages/wizard/Step3RunAnalysis';
 import { Step4AnalysisValidation } from './pages/wizard/Step4AnalysisValidation';
+import { Step5ConfigureRelationships } from './pages/wizard/Step5ConfigureRelationships';
 import { Step5SampleQueriesMetrics } from './pages/wizard/Step5SampleQueriesMetrics';
 import { Step6ReviewPublish } from './pages/wizard/Step6ReviewPublish';
+import { Step8AgentRelationships } from './pages/wizard/Step8AgentRelationships';
 import { PublishSuccess } from './pages/wizard/PublishSuccess';
 import { ConfigureRelationships } from './pages/ConfigureRelationships';
 import { ConfigureGoldenQueries } from './pages/ConfigureGoldenQueries';
@@ -164,7 +166,7 @@ export default function App() {
           path="agents/create/step-5"
           element={
             <ProtectedRoute requiredPermission="canCreateAgents">
-              <Step5SampleQueriesMetrics />
+              <Step5ConfigureRelationships />
             </ProtectedRoute>
           }
         />
@@ -172,7 +174,23 @@ export default function App() {
           path="agents/create/step-6"
           element={
             <ProtectedRoute requiredPermission="canCreateAgents">
+              <Step5SampleQueriesMetrics />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="agents/create/step-7"
+          element={
+            <ProtectedRoute requiredPermission="canCreateAgents">
               <Step6ReviewPublish />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="agents/create/step-8"
+          element={
+            <ProtectedRoute requiredPermission="canCreateAgents">
+              <Step8AgentRelationships />
             </ProtectedRoute>
           }
         />
@@ -223,6 +241,14 @@ export default function App() {
           element={
             <ProtectedRoute requiredPermission="canEditAgents">
               <Step6ReviewPublish />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="agents/:agentId/edit/step-7"
+          element={
+            <ProtectedRoute requiredPermission="canEditAgents">
+              <Step8AgentRelationships />
             </ProtectedRoute>
           }
         />

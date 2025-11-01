@@ -1,529 +1,747 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { WizardLayout } from '../../components/wizard/WizardLayout';
+import { TwoPanelWizardLayout, PanelItem } from '../../components/wizard/TwoPanelWizardLayout';
+import { WizardChat } from '../../components/wizard/WizardChat';
 import { Button } from '../../components/ui/button';
-import { Card } from '../../components/ui/card';
 import { Badge } from '../../components/ui/badge';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../components/ui/select';
+import { Label } from '../../components/ui/label';
 import { Textarea } from '../../components/ui/textarea';
-import { ScrollArea } from '../../components/ui/scroll-area';
-import { 
-  MessageSquare, 
-  TrendingUp, 
-  ChevronRight,
-  Calendar,
-  CheckCircle2,
-  AlertCircle,
-  Send,
-  Code
-} from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '../../components/ui/dialog';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../../components/ui/tooltip';
+import { ChevronRight, Check, MessageSquare, TrendingUp, CheckCircle2, XCircle, Code, Edit2 } from 'lucide-react';
 import { toast } from 'sonner@2.0.3';
-import { SqlWorkbench } from '../../components/SqlWorkbench';
 
-interface SampleQuery {
-  id: string;
-  question: string;
-  aiAnswer: string;
-  sqlQuery: string;
-  status: 'pending' | 'approved' | 'needs_revision';
-  conversation: { role: 'ai' | 'user'; message: string; timestamp: Date }[];
-}
+type ItemType = 'query' | 'metric';
 
-interface Metric {
+interface QueryOrMetricItem {
   id: string;
-  name: string;
+  type: ItemType;
+  label: string;
   description: string;
-  sqlQuery: string;
-  currentValue: string;
-  timeWindow: '7d' | '30d' | '90d' | 'ytd' | 'all';
-  status: 'pending' | 'approved' | 'needs_revision';
-  conversation: { role: 'ai' | 'user'; message: string; timestamp: Date }[];
+  question?: string; // For queries
+  aiAnswer?: string; // For queries
+  sqlQuery?: string;
+  metricValue?: string; // For metrics
+  status: 'pending' | 'approved' | 'rejected' | 'modified';
 }
 
-const MOCK_SAMPLE_QUERIES: SampleQuery[] = [
+const MOCK_ITEMS: QueryOrMetricItem[] = [
+  // Sample Queries
   {
     id: 'q1',
+    type: 'query',
+    label: 'Total sales last month',
+    description: 'What were our total sales last month?',
     question: 'What were our total sales last month?',
     aiAnswer: 'Total sales for last month were $2.4M, which represents a 12% increase compared to the previous month.',
-    sqlQuery: `SELECT 
-  SUM(total_amount) as total_sales,
-  COUNT(*) as order_count
-FROM orders
-WHERE created_at >= DATE_TRUNC('month', CURRENT_DATE - INTERVAL '1 month')
-  AND created_at < DATE_TRUNC('month', CURRENT_DATE)`,
+    sqlQuery: `SELECT \n  SUM(total_amount) as total_sales,\n  COUNT(*) as order_count\nFROM orders\nWHERE created_at >= DATE_TRUNC('month', CURRENT_DATE - INTERVAL '1 month')\n  AND created_at < DATE_TRUNC('month', CURRENT_DATE)`,
     status: 'pending',
-    conversation: [],
   },
   {
     id: 'q2',
+    type: 'query',
+    label: 'Products low in stock',
+    description: 'Which products are currently low in stock?',
     question: 'Which products are currently low in stock?',
     aiAnswer: 'There are 8 products with stock levels below the reorder threshold. The most critical are: Wireless Mouse (5 units), USB-C Cable (12 units), and Phone Case (8 units).',
-    sqlQuery: `SELECT 
-  p.name,
-  i.quantity_available,
-  i.reorder_threshold
-FROM inventory i
-JOIN products p ON i.product_id = p.id
-WHERE i.quantity_available < i.reorder_threshold
-ORDER BY (i.reorder_threshold - i.quantity_available) DESC`,
+    sqlQuery: `SELECT \n  p.name,\n  i.quantity_available,\n  i.reorder_threshold\nFROM inventory i\nJOIN products p ON i.product_id = p.id\nWHERE i.quantity_available < i.reorder_threshold\nORDER BY (i.reorder_threshold - i.quantity_available) DESC`,
     status: 'pending',
-    conversation: [],
   },
   {
     id: 'q3',
+    type: 'query',
+    label: 'Top 10 customers',
+    description: 'Who are our top 10 customers by revenue?',
     question: 'Who are our top 10 customers by revenue?',
     aiAnswer: 'The top 10 customers account for $850K in total revenue. Leading customer is TechCorp Inc. with $145K in lifetime value.',
-    sqlQuery: `SELECT 
-  c.name,
-  c.email,
-  SUM(o.total_amount) as lifetime_value,
-  COUNT(o.id) as order_count
-FROM customers c
-JOIN orders o ON c.id = o.customer_id
-GROUP BY c.id, c.name, c.email
-ORDER BY lifetime_value DESC
-LIMIT 10`,
+    sqlQuery: `SELECT \n  c.name,\n  c.email,\n  SUM(o.total_amount) as lifetime_value,\n  COUNT(o.id) as order_count\nFROM customers c\nJOIN orders o ON c.id = o.customer_id\nGROUP BY c.id, c.name, c.email\nORDER BY lifetime_value DESC\nLIMIT 10`,
     status: 'pending',
-    conversation: [],
   },
-];
-
-const MOCK_METRICS: Metric[] = [
+  // Metrics
   {
     id: 'm1',
-    name: 'Total Revenue',
+    type: 'metric',
+    label: 'Total Revenue',
     description: 'Sum of all completed orders',
-    sqlQuery: 'SELECT SUM(total_amount) FROM orders WHERE status = \'completed\'',
-    currentValue: '$2,450,000',
-    timeWindow: '30d',
+    sqlQuery: "SELECT SUM(total_amount) FROM orders WHERE status = 'completed'",
+    metricValue: '$2,450,000',
     status: 'pending',
-    conversation: [],
   },
   {
     id: 'm2',
-    name: 'Average Order Value',
+    type: 'metric',
+    label: 'Average Order Value',
     description: 'Mean revenue per order',
-    sqlQuery: 'SELECT AVG(total_amount) FROM orders WHERE status = \'completed\'',
-    currentValue: '$127.50',
-    timeWindow: '30d',
+    sqlQuery: "SELECT AVG(total_amount) FROM orders WHERE status = 'completed'",
+    metricValue: '$127.50',
     status: 'pending',
-    conversation: [],
   },
   {
     id: 'm3',
-    name: 'Active Customers',
-    description: 'Unique customers with orders in selected period',
-    sqlQuery: 'SELECT COUNT(DISTINCT customer_id) FROM orders WHERE created_at > CURRENT_DATE - INTERVAL \'30 days\'',
-    currentValue: '4,234',
-    timeWindow: '30d',
+    type: 'metric',
+    label: 'Active Customers',
+    description: 'Unique customers with orders in last 30 days',
+    sqlQuery: "SELECT COUNT(DISTINCT customer_id) FROM orders WHERE created_at > CURRENT_DATE - INTERVAL '30 days'",
+    metricValue: '4,234',
     status: 'pending',
-    conversation: [],
-  },
-  {
-    id: 'm4',
-    name: 'Inventory Turnover Rate',
-    description: 'Rate at which inventory is sold and replaced',
-    sqlQuery: 'SELECT (SUM(quantity_sold) / AVG(quantity_available)) FROM inventory',
-    currentValue: '6.2x',
-    timeWindow: '90d',
-    status: 'pending',
-    conversation: [],
   },
 ];
 
+// SQL Syntax Highlighting
+function highlightSql(sql: string): string {
+  const keywords = /\b(SELECT|FROM|WHERE|JOIN|LEFT|RIGHT|INNER|OUTER|ON|AND|OR|GROUP BY|ORDER BY|HAVING|AS|COUNT|SUM|AVG|MAX|MIN|DISTINCT|LIMIT|OFFSET|INSERT|UPDATE|DELETE|CREATE|ALTER|DROP|TABLE|INDEX|VIEW|DATABASE|DATE_TRUNC|INTERVAL|CURRENT_DATE)\b/gi;
+  const functions = /\b(COUNT|SUM|AVG|MAX|MIN|UPPER|LOWER|TRIM|LENGTH|SUBSTRING|CONCAT|ROUND|FLOOR|CEIL|NOW|DATE|YEAR|MONTH|DAY)\s*\(/gi;
+  const strings = /'([^']*)'/g;
+  const numbers = /\b(\d+)\b/g;
+  const comments = /(--[^\n]*)/g;
+  
+  return sql
+    .replace(keywords, '<span style="color: #C586C0;">$1</span>')
+    .replace(functions, '<span style="color: #DCDCAA;">$1</span>(')
+    .replace(strings, '<span style="color: #CE9178;">\'$1\'</span>')
+    .replace(numbers, '<span style="color: #B5CEA8;">$1</span>')
+    .replace(comments, '<span style="color: #6A9955;">$1</span>');
+}
+
 export function Step5SampleQueriesMetrics() {
   const navigate = useNavigate();
-  const [queries, setQueries] = useState<SampleQuery[]>(MOCK_SAMPLE_QUERIES);
-  const [metrics, setMetrics] = useState<Metric[]>(MOCK_METRICS);
-  const [activeChat, setActiveChat] = useState<{ type: 'query' | 'metric'; id: string } | null>(null);
-  const [chatInput, setChatInput] = useState('');
+  const [items, setItems] = useState(MOCK_ITEMS);
+  const [activeItemId, setActiveItemId] = useState(MOCK_ITEMS[0].id);
+  const [completedItems, setCompletedItems] = useState<Set<string>>(new Set());
+  const [showChat, setShowChat] = useState(false);
+  const [codeEditorOpen, setCodeEditorOpen] = useState(false);
+  const [correctCode, setCorrectCode] = useState('');
 
-  const handleQuickApprove = (type: 'query' | 'metric', id: string) => {
-    if (type === 'query') {
-      setQueries(queries.map((q) =>
-        q.id === id ? { ...q, status: 'approved' } : q
-      ));
-    } else {
-      setMetrics(metrics.map((m) =>
-        m.id === id ? { ...m, status: 'approved' } : m
-      ));
-    }
-    toast.success('Approved');
-  };
+  const activeItem = items.find((i) => i.id === activeItemId);
 
-  const handleOpenChat = (type: 'query' | 'metric', id: string) => {
-    setActiveChat({ type, id });
-    setChatInput('');
-  };
+  const panelItems: PanelItem[] = items.map((item) => ({
+    id: item.id,
+    label: item.label,
+    description: item.description,
+    completed: completedItems.has(item.id),
+    inputType: 'multiple-choice',
+    icon: item.type === 'query' ? MessageSquare : TrendingUp,
+  }));
 
-  const handleSendMessage = (message?: string) => {
-    if (!activeChat) return;
-    const msg = message || chatInput;
-    if (!msg.trim()) return;
-
-    const newConversation = { role: 'user' as const, message: msg, timestamp: new Date() };
-
-    if (activeChat.type === 'query') {
-      setQueries(queries.map((q) =>
-        q.id === activeChat.id
-          ? {
-              ...q,
-              conversation: [...q.conversation, newConversation],
-              status: 'needs_revision',
-            }
-          : q
-      ));
-    } else {
-      setMetrics(metrics.map((m) =>
-        m.id === activeChat.id
-          ? {
-              ...m,
-              conversation: [...m.conversation, newConversation],
-              status: 'needs_revision',
-            }
-          : m
-      ));
-    }
-
-    setChatInput('');
-    toast.success('Feedback submitted');
-  };
-
-  const handleMetricTimeWindowChange = (metricId: string, timeWindow: Metric['timeWindow']) => {
-    setMetrics(metrics.map((m) =>
-      m.id === metricId ? { ...m, timeWindow } : m
-    ));
-  };
-
-  const handleContinue = () => {
-    const pendingQueries = queries.filter((q) => q.status === 'pending').length;
-    const pendingMetrics = metrics.filter((m) => m.status === 'pending').length;
+  const handleApprove = () => {
+    if (!activeItem) return;
     
-    if (pendingQueries > 0 || pendingMetrics > 0) {
-      toast.error(`Please review all items (${pendingQueries + pendingMetrics} remaining)`);
+    setItems((prevItems) =>
+      prevItems.map((item) =>
+        item.id === activeItemId ? { ...item, status: 'approved' as const } : item
+      )
+    );
+    
+    setCompletedItems(new Set(completedItems).add(activeItemId));
+    toast.success('Approved');
+    
+    // Auto-move to next after a brief moment
+    setTimeout(() => {
+      moveToNextPending();
+    }, 800);
+  };
+
+  const handleReject = () => {
+    if (!activeItem) return;
+    
+    setItems((prevItems) =>
+      prevItems.map((item) =>
+        item.id === activeItemId ? { ...item, status: 'rejected' as const } : item
+      )
+    );
+    
+    setCompletedItems(new Set(completedItems).add(activeItemId));
+    toast.success('Rejected');
+    
+    // Auto-move to next after a brief moment
+    setTimeout(() => {
+      moveToNextPending();
+    }, 800);
+  };
+
+  const handleModify = () => {
+    setShowChat(true);
+  };
+
+  const handleEdit = () => {
+    if (!activeItem) return;
+    // Reset to pending status to allow re-review
+    setItems((prevItems) =>
+      prevItems.map((item) =>
+        item.id === activeItemId ? { ...item, status: 'pending' as const } : item
+      )
+    );
+    setCompletedItems((prev) => {
+      const newSet = new Set(prev);
+      newSet.delete(activeItemId);
+      return newSet;
+    });
+  };
+
+  const moveToNextPending = () => {
+    const currentIndex = items.findIndex((i) => i.id === activeItemId);
+    const nextPending = items
+      .slice(currentIndex + 1)
+      .find((i) => !completedItems.has(i.id));
+    
+    if (nextPending) {
+      setActiveItemId(nextPending.id);
+      setShowChat(false);
+    }
+  };
+
+  const handleChatConfirm = (value: string) => {
+    if (!activeItem) return;
+    
+    // Mark as modified
+    setItems((prevItems) =>
+      prevItems.map((item) =>
+        item.id === activeItemId ? { ...item, status: 'modified' as const } : item
+      )
+    );
+    
+    setCompletedItems(new Set(completedItems).add(activeItemId));
+    setShowChat(false);
+    toast.success('Modified');
+    
+    setTimeout(() => {
+      moveToNextPending();
+    }, 800);
+  };
+
+  const handleCodeSubmit = () => {
+    if (!correctCode.trim()) {
+      toast.error('Please enter the correct code');
       return;
     }
 
-    localStorage.setItem('wizardData', JSON.stringify({ 
-      ...JSON.parse(localStorage.getItem('wizardData') || '{}'),
-      sampleQueries: queries,
-      metrics 
-    }));
-    toast.success('Queries and metrics validated');
-    navigate('/agents/create/step-6');
+    // Update the item with correct code
+    setItems((prevItems) =>
+      prevItems.map((item) =>
+        item.id === activeItemId ? { ...item, sqlQuery: correctCode, status: 'modified' as const } : item
+      )
+    );
+    
+    setCodeEditorOpen(false);
+    setCompletedItems(new Set(completedItems).add(activeItemId));
+    toast.success('Modified');
+    setCorrectCode('');
+    setShowChat(false);
+    
+    setTimeout(() => {
+      moveToNextPending();
+    }, 800);
   };
 
-  const getStatusBadge = (status: 'pending' | 'approved' | 'needs_revision') => {
+  const handleSkipChat = () => {
+    if (!activeItem) return;
+    setCompletedItems(new Set(completedItems).add(activeItemId));
+    setShowChat(false);
+    toast.success('Marked as done');
+    moveToNextPending();
+  };
+
+  const handleContinue = () => {
+    if (completedItems.size < items.length) {
+      toast.error('Please review all items before continuing');
+      return;
+    }
+
+    localStorage.setItem('wizardData', JSON.stringify({
+      ...JSON.parse(localStorage.getItem('wizardData') || '{}'),
+      sampleQueries: items.filter(i => i.type === 'query'),
+      metrics: items.filter(i => i.type === 'metric'),
+    }));
+    
+    toast.success('Queries and metrics validated');
+    navigate('/agents/create/step-7'); // Now step 7 is Review & Publish
+  };
+
+  const getStatusLabel = (status: string) => {
     switch (status) {
       case 'approved':
-        return <Badge className="bg-[#00B98E] text-white"><CheckCircle2 className="w-3 h-3 mr-1" />Approved</Badge>;
-      case 'needs_revision':
-        return <Badge variant="outline" className="border-[#F79009] text-[#F79009]"><AlertCircle className="w-3 h-3 mr-1" />In Review</Badge>;
+        return 'Approved';
+      case 'rejected':
+        return 'Rejected';
+      case 'modified':
+        return 'Modified';
       default:
-        return <Badge variant="outline" className="text-[#999999]">Pending Review</Badge>;
+        return '';
     }
   };
 
-  const renderCodeOrText = (text: string) => {
-    const sqlPattern = /\b(SELECT|FROM|WHERE|JOIN|GROUP BY|ORDER BY|INSERT|UPDATE|DELETE|CREATE|ALTER|DROP)\b/i;
-    const columnPattern = /\w+\.\w+/;
-    
-    if (sqlPattern.test(text) || columnPattern.test(text)) {
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'approved':
+        return 'text-[#4CAF50]';
+      case 'rejected':
+        return 'text-[#F04438]';
+      case 'modified':
+        return 'text-[#00B5B3]';
+      default:
+        return '';
+    }
+  };
+
+  const renderContent = () => {
+    if (!activeItem) return null;
+
+    // Chat mode
+    if (showChat) {
       return (
-        <pre className="bg-[#F8F9FA] border border-[#EEEEEE] rounded p-2 font-mono text-[10px] text-[#333333] overflow-x-auto whitespace-pre-wrap">
-          {text}
-        </pre>
-      );
-    }
-    
-    return <p className="text-xs text-[#333333]">{text}</p>;
-  };
-
-  const activeItem = activeChat
-    ? activeChat.type === 'query'
-      ? queries.find((q) => q.id === activeChat.id)
-      : metrics.find((m) => m.id === activeChat.id)
-    : null;
-
-  const queriesApproved = queries.filter((q) => q.status === 'approved').length;
-  const metricsApproved = metrics.filter((m) => m.status === 'approved').length;
-
-  return (
-    <WizardLayout
-      currentStep={5}
-      totalSteps={6}
-      title="Sample Queries & Metrics"
-      onBack={() => navigate('/agents/create/step-4')}
-      onSaveDraft={() => {
-        localStorage.setItem('wizardDraft', JSON.stringify({ step: 5, queries, metrics }));
-        toast.success('Draft saved');
-      }}
-    >
-      <div className="flex gap-6 h-[calc(100vh-200px)]">
-        {/* Main Content - Single Scroll */}
-        <div className="flex-1">
-          <ScrollArea className="h-full pr-4">
-            <div className="space-y-6 max-w-5xl">
-              {/* Sample Queries Section */}
-              <div>
-                <div className="flex items-center gap-3 mb-4">
-                  <MessageSquare className="w-5 h-5 text-[#00B5B3]" />
-                  <h3 className="text-sm font-semibold text-[#333333]">
-                    Sample Queries ({queriesApproved}/{queries.length} approved)
-                  </h3>
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  {queries.map((query, index) => (
-                    <Card key={query.id} className="p-4 border border-[#EEEEEE] flex flex-col">
-                      <div className="flex-1 flex flex-col">
-                        <div className="flex items-start justify-between mb-3">
-                          <div className="flex-1">
-                            <div className="flex items-center gap-2 mb-2">
-                              <Badge variant="outline" className="text-[10px] h-5">Q{index + 1}</Badge>
-                              {getStatusBadge(query.status)}
-                            </div>
-                            <h4 className="text-xs font-semibold text-[#333333] mb-2">{query.question}</h4>
-                          </div>
-                        </div>
-
-                        <div className="bg-[#F8F9FA] rounded p-3 mb-2 border border-[#EEEEEE] flex-1">
-                          <p className="text-xs text-[#333333] line-clamp-3">{query.aiAnswer}</p>
-                        </div>
-
-                        <details className="text-xs mb-3">
-                          <summary className="cursor-pointer text-[#666666] hover:text-[#00B5B3] mb-1 font-medium">
-                            View SQL
-                          </summary>
-                          <pre className="bg-[#F8F9FA] p-2 rounded font-mono text-[10px] text-[#333333] overflow-x-auto border border-[#EEEEEE]">
-                            {query.sqlQuery}
-                          </pre>
-                        </details>
-
-                        {query.conversation.length > 0 && (
-                          <div className="bg-[#FFF8E6] border border-[#F79009] rounded p-2 mb-3">
-                            <p className="text-[10px] font-semibold text-[#F79009] mb-1">Feedback:</p>
-                            <p className="text-xs text-[#333333] line-clamp-2">{query.conversation[query.conversation.length - 1].message}</p>
-                          </div>
-                        )}
-
-                        {query.status === 'pending' && (
-                          <div className="flex gap-2 mt-auto pt-2 border-t border-[#EEEEEE]">
-                            <Button
-                              size="sm"
-                              onClick={() => handleQuickApprove('query', query.id)}
-                              className="flex-1 bg-[#00B98E] hover:bg-[#00A87D] text-white text-xs h-8"
-                            >
-                              <CheckCircle2 className="w-3 h-3 mr-1" />
-                              Approve
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => handleOpenChat('query', query.id)}
-                              className="flex-1 text-xs h-8 text-[#F79009] border-[#F79009] hover:bg-[#FFF8E6]"
-                            >
-                              Revise
-                            </Button>
-                          </div>
-                        )}
-                      </div>
-                    </Card>
-                  ))}
-                </div>
-              </div>
-
-              {/* Metrics Section */}
-              <div>
-                <div className="flex items-center gap-3 mb-4">
-                  <TrendingUp className="w-5 h-5 text-[#00B5B3]" />
-                  <h3 className="text-sm font-semibold text-[#333333]">
-                    Metrics ({metricsApproved}/{metrics.length} approved)
-                  </h3>
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  {metrics.map((metric) => (
-                    <Card key={metric.id} className="p-4 border border-[#EEEEEE] flex flex-col">
-                      <div className="flex-1 flex flex-col">
-                        <div className="flex items-start justify-between mb-3">
-                          <div className="flex-1">
-                            <div className="flex items-center gap-2 mb-2">
-                              {getStatusBadge(metric.status)}
-                            </div>
-                            <h4 className="text-xs font-semibold text-[#333333] mb-1">{metric.name}</h4>
-                            <p className="text-xs text-[#666666]">{metric.description}</p>
-                          </div>
-                        </div>
-
-                        <div className="bg-[#F0FFFE] border border-[#00B5B3] rounded-lg p-3 mb-2">
-                          <div className="text-2xl font-semibold text-[#00B5B3] mb-2">
-                            {metric.currentValue}
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <Calendar className="w-3 h-3 text-[#666666]" />
-                            <Select
-                              value={metric.timeWindow}
-                              onValueChange={(v) => handleMetricTimeWindowChange(metric.id, v as Metric['timeWindow'])}
-                            >
-                              <SelectTrigger className="h-7 w-28 text-[10px] border">
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="7d">Last 7 days</SelectItem>
-                                <SelectItem value="30d">Last 30 days</SelectItem>
-                                <SelectItem value="90d">Last 90 days</SelectItem>
-                                <SelectItem value="ytd">Year to date</SelectItem>
-                                <SelectItem value="all">All time</SelectItem>
-                              </SelectContent>
-                            </Select>
-                          </div>
-                        </div>
-
-                        <details className="text-xs mb-3">
-                          <summary className="cursor-pointer text-[#666666] hover:text-[#00B5B3] mb-1 font-medium">
-                            View SQL
-                          </summary>
-                          <pre className="bg-[#F8F9FA] p-2 rounded font-mono text-[10px] text-[#333333] overflow-x-auto border border-[#EEEEEE]">
-                            {metric.sqlQuery}
-                          </pre>
-                        </details>
-
-                        {metric.conversation.length > 0 && (
-                          <div className="bg-[#FFF8E6] border border-[#F79009] rounded p-2 mb-3">
-                            <p className="text-[10px] font-semibold text-[#F79009] mb-1">Feedback:</p>
-                            <p className="text-xs text-[#333333] line-clamp-2">{metric.conversation[metric.conversation.length - 1].message}</p>
-                          </div>
-                        )}
-
-                        {metric.status === 'pending' && (
-                          <div className="flex gap-2 mt-auto pt-2 border-t border-[#EEEEEE]">
-                            <Button
-                              size="sm"
-                              onClick={() => handleQuickApprove('metric', metric.id)}
-                              className="flex-1 bg-[#00B98E] hover:bg-[#00A87D] text-white text-xs h-8"
-                            >
-                              <CheckCircle2 className="w-3 h-3 mr-1" />
-                              Approve
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => handleOpenChat('metric', metric.id)}
-                              className="flex-1 text-xs h-8 text-[#F79009] border-[#F79009] hover:bg-[#FFF8E6]"
-                            >
-                              Revise
-                            </Button>
-                          </div>
-                        )}
-                      </div>
-                    </Card>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </ScrollArea>
-        </div>
-
-        {/* Chat Sidebar - Only when active */}
-        {activeChat && activeItem && (
-          <div className="w-[380px] flex flex-col bg-white rounded-lg border border-[#00B5B3] overflow-hidden shadow-lg">
-            {/* Chat Header */}
-            <div className="p-3 border-b border-[#EEEEEE] bg-[#F0FFFE]">
-              <div className="flex items-start justify-between mb-1">
-                <h4 className="text-xs font-semibold text-[#333333]">
-                  {activeChat.type === 'query' ? (activeItem as SampleQuery).question : (activeItem as Metric).name}
-                </h4>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setActiveChat(null)}
-                  className="h-5 w-5 p-0 text-lg"
-                >
-                  ×
-                </Button>
-              </div>
-              <p className="text-[10px] text-[#666666]">Request changes or ask questions</p>
-            </div>
-
-            {/* Chat Messages */}
-            <ScrollArea className="flex-1 p-3">
-              <div className="space-y-2">
-                {activeChat.type === 'query' && (
-                  <div className="flex gap-2">
-                    <div className="w-5 h-5 rounded-full bg-[#00B5B3] flex items-center justify-center flex-shrink-0">
-                      <span className="text-[10px] text-white font-semibold">AI</span>
-                    </div>
-                    <div className="flex-1">
-                      <div className="bg-[#F8F9FA] rounded p-2 border border-[#EEEEEE]">
-                        <p className="text-xs text-[#333333]">{(activeItem as SampleQuery).aiAnswer}</p>
-                      </div>
+        <div className="absolute inset-0 flex flex-col">
+          <div className="flex-1 overflow-y-auto">
+            <div className="p-6 space-y-4 border-b border-[#EEEEEE]">
+              {activeItem.type === 'query' ? (
+                <>
+                  <div>
+                    <Label className="mb-2 block text-xs text-[#666666]">Question</Label>
+                    <div className="bg-[#F8F9FA] border border-[#EEEEEE] rounded-lg p-3">
+                      <p className="text-sm text-[#333333]">{activeItem.question}</p>
                     </div>
                   </div>
-                )}
-
-                {(activeItem as any).conversation.map((msg: any, idx: number) => (
-                  <div key={idx} className="flex gap-2">
-                    <div className={`w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 ${
-                      msg.role === 'ai' ? 'bg-[#00B5B3]' : 'bg-[#666666]'
-                    }`}>
-                      <span className="text-[10px] text-white font-semibold">
-                        {msg.role === 'ai' ? 'AI' : 'You'}
+                  <div>
+                    <Label className="mb-2 block text-xs text-[#666666]">AI Answer</Label>
+                    <div className="bg-[#F0FFFE] border border-[#00B5B3] rounded-lg p-3">
+                      <p className="text-sm text-[#333333]">{activeItem.aiAnswer}</p>
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <div>
+                  <Label className="mb-2 block text-xs text-[#666666]">Metric Value</Label>
+                  <div className="bg-[#F0FFFE] border border-[#00B5B3] rounded-lg p-3">
+                    <p className="text-xl text-[#00B5B3]">{activeItem.metricValue}</p>
+                    <p className="text-xs text-[#666666] mt-1">{activeItem.description}</p>
+                  </div>
+                </div>
+              )}
+              {activeItem.sqlQuery && (
+                <div>
+                  <Label className="mb-2 block text-xs text-[#666666]">SQL Query</Label>
+                  <div className="rounded border border-[#E5E7EB] bg-[#F9FAFB]">
+                    <div className="flex items-center justify-between px-2.5 py-1.5 border-b border-[#E5E7EB]">
+                      <span className="text-xs text-[#6B7280]">
+                        {activeItem.type === 'query' ? 'query.sql' : 'metric.sql'}
                       </span>
                     </div>
-                    <div className="flex-1">
-                      <div className={`rounded p-2 ${
-                        msg.role === 'ai'
-                          ? 'bg-[#F8F9FA] border border-[#EEEEEE]'
-                          : 'bg-[#E0F7F7] border border-[#00B5B3]'
-                      }`}>
-                        {renderCodeOrText(msg.message)}
-                      </div>
+                    <div className="p-2.5">
+                      <pre className="whitespace-pre-wrap font-mono text-xs leading-relaxed text-[#374151]">
+                        <span dangerouslySetInnerHTML={{ __html: highlightSql(activeItem.sqlQuery) }} />
+                      </pre>
                     </div>
                   </div>
-                ))}
-              </div>
-            </ScrollArea>
+                </div>
+              )}
+            </div>
 
-            {/* Chat Input */}
-            <div className="p-2 border-t border-[#EEEEEE] bg-[#FAFBFC]">
-              <div className="flex gap-2">
-                <Textarea
-                  placeholder="Describe what needs to change..."
-                  value={chatInput}
-                  onChange={(e) => setChatInput(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' && !e.shiftKey) {
-                      e.preventDefault();
-                      handleSendMessage();
-                    }
-                  }}
-                  rows={2}
-                  className="resize-none border border-[#DDDDDD] focus:border-[#00B5B3] text-xs"
-                />
-                <Button
-                  onClick={() => handleSendMessage()}
-                  disabled={!chatInput.trim()}
-                  className="bg-[#00B5B3] hover:bg-[#009996] px-2"
-                  size="sm"
-                >
-                  <Send className="w-3 h-3" />
-                </Button>
+            <div className="flex-1">
+              <WizardChat
+                taskTitle={activeItem.label}
+                taskDescription={`Discuss modifications needed for this ${activeItem.type}`}
+                initialPrompt={`I ${activeItem.type === 'query' ? 'answered this question' : 'calculated this metric'}. Does this look correct to you? If not, let me know what needs to be changed.`}
+                placeholder="Describe what needs to change..."
+                onConfirm={handleChatConfirm}
+                onSkip={handleSkipChat}
+              />
+            </div>
+          </div>
+          
+          <div className="border-t border-[#EEEEEE] p-4 bg-white">
+            <Button
+              onClick={() => {
+                setCorrectCode(activeItem.sqlQuery || '');
+                setCodeEditorOpen(true);
+              }}
+              variant="outline"
+              className="w-full text-[#00B5B3] border-[#00B5B3] hover:bg-[#F0FFFE]"
+            >
+              <Code className="w-4 h-4 mr-2" />
+              Add Correct Code
+            </Button>
+          </div>
+        </div>
+      );
+    }
+
+    // Completed state - show status and task completed
+    if (completedItems.has(activeItemId)) {
+      return (
+        <div className="absolute inset-0 flex flex-col">
+          <div className="flex-1 overflow-y-auto pb-10">
+            <div className="px-[24px] py-[0px]">
+              <div className="py-6 pr-6">
+                <p className={`font-semibold text-sm ${getStatusColor(activeItem.status)} mb-1`}>
+                  {getStatusLabel(activeItem.status)}
+                </p>
+                <p className="font-semibold text-sm text-[#333333] mb-4">✅ Task Completed</p>
+                
+                {activeItem.type === 'query' ? (
+                  <div className="space-y-3">
+                    <div>
+                      <Label className="mb-2 block">Question</Label>
+                      <div className="bg-[#F8F9FA] border border-[#EEEEEE] rounded-lg p-3">
+                        <p className="text-sm text-[#333333]">{activeItem.question}</p>
+                      </div>
+                    </div>
+                    <div>
+                      <Label className="mb-2 block">AI Answer</Label>
+                      <div className="bg-[#F0FFFE] border border-[#00B5B3] rounded-lg p-3">
+                        <p className="text-sm text-[#333333]">{activeItem.aiAnswer}</p>
+                      </div>
+                    </div>
+                    {activeItem.sqlQuery && (
+                      <div>
+                        <Label className="mb-2 block">SQL Query</Label>
+                        <div className="rounded border border-[#E5E7EB] bg-[#F9FAFB]">
+                          <div className="flex items-center justify-between px-2.5 py-1.5 border-b border-[#E5E7EB]">
+                            <span className="text-xs text-[#6B7280]">query.sql</span>
+                          </div>
+                          <div className="p-2.5">
+                            <pre className="whitespace-pre-wrap font-mono text-xs leading-relaxed text-[#374151]">
+                              <span dangerouslySetInnerHTML={{ __html: highlightSql(activeItem.sqlQuery) }} />
+                            </pre>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    <div>
+                      <Label className="mb-2 block">Metric Name</Label>
+                      <div className="bg-[#F8F9FA] border border-[#EEEEEE] rounded-lg p-3">
+                        <p className="text-sm text-[#333333]">{activeItem.label}</p>
+                      </div>
+                    </div>
+                    <div>
+                      <Label className="mb-2 block">Current Value</Label>
+                      <div className="bg-[#F0FFFE] border border-[#00B5B3] rounded-lg p-3">
+                        <p className="text-xl text-[#00B5B3]">{activeItem.metricValue}</p>
+                        <p className="text-xs text-[#666666] mt-1">{activeItem.description}</p>
+                      </div>
+                    </div>
+                    {activeItem.sqlQuery && (
+                      <div>
+                        <Label className="mb-2 block">SQL Calculation</Label>
+                        <div className="rounded border border-[#E5E7EB] bg-[#F9FAFB]">
+                          <div className="flex items-center justify-between px-2.5 py-1.5 border-b border-[#E5E7EB]">
+                            <span className="text-xs text-[#6B7280]">metric.sql</span>
+                          </div>
+                          <div className="p-2.5">
+                            <pre className="whitespace-pre-wrap font-mono text-xs leading-relaxed text-[#374151]">
+                              <span dangerouslySetInnerHTML={{ __html: highlightSql(activeItem.sqlQuery) }} />
+                            </pre>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
           </div>
-        )}
+
+          <div className="flex-shrink-0 border-t border-[#EEEEEE] p-4 bg-white">
+            <Button
+              onClick={handleEdit}
+              variant="outline"
+              className="w-full"
+            >
+              <Edit2 className="w-4 h-4 mr-2" />
+              Edit
+            </Button>
+          </div>
+        </div>
+      );
+    }
+
+    // Query display
+    if (activeItem.type === 'query') {
+      return (
+        <div className="absolute inset-0 overflow-y-auto flex flex-col">
+          <div className="flex-1 p-6 space-y-4">
+            <div>
+              <Label className="mb-2 block">Question</Label>
+              <div className="bg-[#F8F9FA] border border-[#EEEEEE] rounded-lg p-4">
+                <p className="text-sm text-[#333333]">{activeItem.question}</p>
+              </div>
+            </div>
+
+            <div>
+              <Label className="mb-2 block">AI Answer</Label>
+              <div className="bg-[#F0FFFE] border border-[#00B5B3] rounded-lg p-4">
+                <p className="text-sm text-[#333333]">{activeItem.aiAnswer}</p>
+              </div>
+            </div>
+
+            {/* SQL Query - Always Expanded */}
+            {activeItem.sqlQuery && (
+              <div>
+                <Label className="mb-2 block">SQL Query</Label>
+                <div className="rounded border border-[#E5E7EB] bg-[#F9FAFB]">
+                  <div className="flex items-center justify-between px-2.5 py-1.5 border-b border-[#E5E7EB]">
+                    <span className="text-xs text-[#6B7280]">query.sql</span>
+                  </div>
+                  <div className="p-2.5">
+                    <pre className="whitespace-pre-wrap font-mono text-xs leading-relaxed text-[#374151]">
+                      <span dangerouslySetInnerHTML={{ __html: highlightSql(activeItem.sqlQuery) }} />
+                    </pre>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Action Buttons */}
+            <div className="flex items-center justify-between pt-2">
+              <TooltipProvider delayDuration={200}>
+                <div className="flex items-center gap-2">
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <button
+                        onClick={handleApprove}
+                        className="w-7 h-7 rounded-full bg-[#E8F5E9] hover:bg-[#C8E6C9] flex items-center justify-center transition-colors"
+                      >
+                        <CheckCircle2 className="w-4 h-4 text-[#4CAF50]" />
+                      </button>
+                    </TooltipTrigger>
+                    <TooltipContent side="top" className="text-xs">
+                      Accept this query as correct
+                    </TooltipContent>
+                  </Tooltip>
+                  
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <button
+                        onClick={handleReject}
+                        className="w-7 h-7 rounded-full bg-[#FFEBEE] hover:bg-[#FFCDD2] flex items-center justify-center transition-colors"
+                      >
+                        <XCircle className="w-4 h-4 text-[#F04438]" />
+                      </button>
+                    </TooltipTrigger>
+                    <TooltipContent side="top" className="text-xs">
+                      Remove this query
+                    </TooltipContent>
+                  </Tooltip>
+                  
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <button
+                        onClick={handleModify}
+                        className="w-7 h-7 rounded-full bg-[#E0F7F7] hover:bg-[#B2EBF2] flex items-center justify-center transition-colors"
+                      >
+                        <MessageSquare className="w-4 h-4 text-[#00B5B3]" />
+                      </button>
+                    </TooltipTrigger>
+                    <TooltipContent side="top" className="text-xs">
+                      Chat with AI to modify this query
+                    </TooltipContent>
+                  </Tooltip>
+                </div>
+              </TooltipProvider>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // Metric display
+    return (
+      <div className="absolute inset-0 overflow-y-auto flex flex-col">
+        <div className="flex-1 p-6 space-y-4">
+          <div>
+            <Label className="mb-2 block">Metric Name</Label>
+            <div className="bg-[#F8F9FA] border border-[#EEEEEE] rounded-lg p-4">
+              <p className="text-sm text-[#333333]">{activeItem.label}</p>
+            </div>
+          </div>
+
+          <div>
+            <Label className="mb-2 block">Current Value</Label>
+            <div className="bg-[#F0FFFE] border border-[#00B5B3] rounded-lg p-4">
+              <p className="text-2xl text-[#00B5B3]">{activeItem.metricValue}</p>
+              <p className="text-xs text-[#666666] mt-1">{activeItem.description}</p>
+            </div>
+          </div>
+
+          {/* SQL Calculation - Always Expanded */}
+          {activeItem.sqlQuery && (
+            <div>
+              <Label className="mb-2 block">SQL Calculation</Label>
+              <div className="rounded border border-[#E5E7EB] bg-[#F9FAFB]">
+                <div className="flex items-center justify-between px-2.5 py-1.5 border-b border-[#E5E7EB]">
+                  <span className="text-xs text-[#6B7280]">metric.sql</span>
+                </div>
+                <div className="p-2.5">
+                  <pre className="whitespace-pre-wrap font-mono text-xs leading-relaxed text-[#374151]">
+                    <span dangerouslySetInnerHTML={{ __html: highlightSql(activeItem.sqlQuery) }} />
+                  </pre>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Action Buttons */}
+          <div className="flex items-center justify-between pt-2">
+            <TooltipProvider delayDuration={200}>
+              <div className="flex items-center gap-2">
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      onClick={handleApprove}
+                      className="w-7 h-7 rounded-full bg-[#E8F5E9] hover:bg-[#C8E6C9] flex items-center justify-center transition-colors"
+                    >
+                      <CheckCircle2 className="w-4 h-4 text-[#4CAF50]" />
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent side="top" className="text-xs">
+                    Accept this metric as correct
+                  </TooltipContent>
+                </Tooltip>
+                
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      onClick={handleReject}
+                      className="w-7 h-7 rounded-full bg-[#FFEBEE] hover:bg-[#FFCDD2] flex items-center justify-center transition-colors"
+                    >
+                      <XCircle className="w-4 h-4 text-[#F04438]" />
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent side="top" className="text-xs">
+                    Remove this metric
+                  </TooltipContent>
+                </Tooltip>
+                
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      onClick={handleModify}
+                      className="w-7 h-7 rounded-full bg-[#E0F7F7] hover:bg-[#B2EBF2] flex items-center justify-center transition-colors"
+                    >
+                      <MessageSquare className="w-4 h-4 text-[#00B5B3]" />
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent side="top" className="text-xs">
+                    Chat with AI to modify this metric
+                  </TooltipContent>
+                </Tooltip>
+              </div>
+            </TooltipProvider>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  const allReviewed = completedItems.size >= items.length;
+
+  return (
+    <WizardLayout
+      title="Configure Sample Queries & Metrics"
+      currentStep={6}
+      totalSteps={7}
+      onBack={() => navigate('/agents/create/step-5')}
+      onSaveDraft={() => {
+        localStorage.setItem(
+          'wizardDraft',
+          JSON.stringify({
+            step: 6,
+            items,
+            completedItems: Array.from(completedItems),
+          })
+        );
+        toast.success('Draft saved');
+      }}
+    >
+      <div className="h-full flex flex-col">
+        {/* Two-Panel Layout */}
+        <div className="flex-1 overflow-hidden pb-[88px]">
+          <TwoPanelWizardLayout
+            items={panelItems}
+            activeItemId={activeItemId}
+            onItemClick={setActiveItemId}
+          >
+            {renderContent()}
+          </TwoPanelWizardLayout>
+        </div>
+
+        {/* Footer - Always show progress */}
+        <div className="fixed bottom-0 left-[280px] right-0 bg-white border-t border-[#EEEEEE] shadow-[0_-2px_8px_rgba(0,0,0,0.04)] z-40">
+          <div className="max-w-5xl mx-auto px-8 py-4">
+            <div className="flex items-center justify-between gap-6">
+              <div className="flex items-center gap-4">
+                <div className="flex items-center gap-2">
+                  <div className="w-6 h-6 rounded-full bg-[#00B5B3] text-white flex items-center justify-center text-xs">
+                    {completedItems.size}
+                  </div>
+                  <span className="text-sm text-[#666666]">
+                    {completedItems.size}/{items.length} item{items.length !== 1 ? 's' : ''} reviewed
+                  </span>
+                </div>
+                {allReviewed && (
+                  <Badge
+                    variant="outline"
+                    className="bg-[#E8F5E9] text-[#4CAF50] border-[#4CAF50]"
+                  >
+                    <Check className="w-3 h-3 mr-1" />
+                    Ready to continue
+                  </Badge>
+                )}
+              </div>
+              <Button
+                onClick={handleContinue}
+                className="bg-[#00B5B3] hover:bg-[#009996]"
+                disabled={!allReviewed}
+              >
+                Continue to Review & Publish
+              </Button>
+            </div>
+          </div>
+        </div>
       </div>
 
-      {/* Continue Button */}
-      <div className="flex justify-end mt-6">
-        <Button
-          onClick={handleContinue}
-          className="bg-[#00B5B3] hover:bg-[#009996]"
-          disabled={queries.some((q) => q.status === 'pending') || metrics.some((m) => m.status === 'pending')}
-        >
-          Continue to Review & Publish
-          <ChevronRight className="w-4 h-4 ml-2" />
-        </Button>
-      </div>
+      {/* Code Editor Dialog */}
+      <Dialog open={codeEditorOpen} onOpenChange={setCodeEditorOpen}>
+        <DialogContent className="max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>Add Correct SQL Code</DialogTitle>
+            <DialogDescription>
+              Paste the correct SQL code below that should replace the current query or metric calculation.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="code-editor">SQL Code *</Label>
+              <Textarea
+                id="code-editor"
+                value={correctCode}
+                onChange={(e) => setCorrectCode(e.target.value)}
+                placeholder="SELECT * FROM..."
+                className="font-mono text-sm h-64 mt-2"
+              />
+            </div>
+            <div className="flex gap-3 justify-end">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setCodeEditorOpen(false);
+                  setCorrectCode('');
+                }}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={handleCodeSubmit}
+                className="bg-[#00B5B3] hover:bg-[#009996]"
+              >
+                Submit Code
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </WizardLayout>
   );
 }

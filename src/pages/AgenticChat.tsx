@@ -58,7 +58,10 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip,
 import { motion, AnimatePresence } from 'motion/react';
 import { useAuthStore, hasPermission } from '../lib/authStore';
 import { useConversationStore, type Artifact as StoreArtifact, type Message as StoreMessage, type Conversation as StoreConversation } from '../lib/conversationStore';
+import { useRulesStore } from '../lib/rulesStore';
 import { useSidebar } from '../components/ChatLayout';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
+import { Switch } from '../components/ui/switch';
 
 // ═══════════════════════════════════════════════════════════════════
 // ANIMATION VARIANTS
@@ -158,6 +161,11 @@ interface Message {
   
   artifacts?: Artifact[];
   showReviewButton?: boolean;
+  
+  // Rule saving
+  savedAsRule?: boolean;
+  savedRuleName?: string;
+  savedRuleId?: string;
   
   // Error handling
   errorType?: 'system_error' | 'access_denied'; // Removed 'lack_of_context'
@@ -347,6 +355,16 @@ export function AgenticChat() {
   const [analystEmail, setAnalystEmail] = useState('');
   const [requestingSql, setRequestingSql] = useState<string>('');
   const [generatedSummary, setGeneratedSummary] = useState('');
+
+  // Save Rule Dialog
+  const addRule = useRulesStore((state) => state.addRule);
+  const [showSaveRuleDialog, setShowSaveRuleDialog] = useState(false);
+  const [ruleMessageId, setRuleMessageId] = useState<string | null>(null);
+  const [ruleName, setRuleName] = useState('');
+  const [ruleType, setRuleType] = useState<'cohort' | 'filter' | 'reference' | 'custom'>('custom');
+  const [ruleDescription, setRuleDescription] = useState('');
+  const [ruleDefinition, setRuleDefinition] = useState('');
+  const [ruleIsPublic, setRuleIsPublic] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const analysisMessageRef = useRef<HTMLDivElement>(null);
@@ -1676,6 +1694,82 @@ ORDER BY total_revenue DESC`;
     toast.success('SQL query updated');
   };
 
+  // Handle opening Save Rule dialog
+  const handleSaveAsRule = (messageId: string) => {
+    const message = messages.find(m => m.id === messageId);
+    if (!message) return;
+
+    // Extract definition from artifacts or message content
+    let definition = '';
+    if (message.artifacts && message.artifacts.length > 0) {
+      const sqlArtifact = message.artifacts.find(a => a.type === 'sql') as SQLArtifact | undefined;
+      if (sqlArtifact && sqlArtifact.query) {
+        definition = sqlArtifact.query;
+        // Try to extract WHERE clause for cleaner rules
+        const whereMatch = sqlArtifact.query.match(/WHERE\s+(.+?)(?:GROUP BY|ORDER BY|LIMIT|$)/is);
+        if (whereMatch) {
+          definition = whereMatch[1].trim();
+        }
+      }
+    }
+
+    setRuleMessageId(messageId);
+    setRuleDefinition(definition);
+    setRuleName('');
+    setRuleType('custom');
+    setRuleDescription('');
+    setRuleIsPublic(false);
+    setShowSaveRuleDialog(true);
+  };
+
+  // Handle saving the rule
+  const handleSaveRule = () => {
+    if (!ruleName.trim()) {
+      toast.error('Please enter a rule name');
+      return;
+    }
+
+    if (!ruleDefinition.trim()) {
+      toast.error('No definition found to save');
+      return;
+    }
+
+    const newRule = addRule({
+      name: ruleName.trim(),
+      owner: user?.email || '',
+      type: ruleType,
+      description: ruleDescription.trim() || `Rule saved from chat`,
+      definition: ruleDefinition,
+      visibility: ruleIsPublic ? 'public' : 'private',
+      sharedWith: ruleIsPublic ? [] : [user?.email || ''],
+      metadata: {},
+      sourceType: 'chat',
+      sourceConversationId: currentConvId,
+    });
+
+    // Mark message as having saved rule
+    if (ruleMessageId) {
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === ruleMessageId
+            ? { ...m, savedAsRule: true, savedRuleName: newRule.name, savedRuleId: newRule.id }
+            : m
+        )
+      );
+    }
+
+    setShowSaveRuleDialog(false);
+    toast.success(`Rule "${newRule.name}" saved successfully!`);
+    
+    // Reset form
+    setRuleName('');
+    setRuleType('custom');
+    setRuleDescription('');
+    setRuleDefinition('');
+    setRuleIsPublic(false);
+    setRuleMessageId(null);
+  };
+
   // ════════════════════════════════════════════════════��══════════
   // RENDER
   // ═══════════════��═══════════════════════════════════════════════
@@ -1875,6 +1969,7 @@ ORDER BY total_revenue DESC`;
                       message={msg}
                       onViewArtifacts={handleViewArtifacts}
                       onRequestReview={() => setReviewDialogOpen(true)}
+                      onSaveAsRule={handleSaveAsRule}
                       onToggleExecutionLogs={toggleExecutionLogs}
                       onToggleThinking={toggleThinking}
                       onEditSql={handleEditSql}
@@ -2627,6 +2722,7 @@ function MessageComponent({
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0 }}
+            className="flex gap-2"
           >
             <Button
               onClick={onRequestReview}
@@ -2637,6 +2733,35 @@ function MessageComponent({
               Request Analyst Review
               <Users className="w-4 h-4 ml-2" />
             </Button>
+            {/* Save as Rule Button */}
+            {message.artifacts && message.artifacts.some(a => a.type === 'sql') && !message.savedAsRule && (
+              <Button
+                onClick={() => onSaveAsRule?.(message.id)}
+                variant="outline"
+                size="sm"
+                className="text-[#00B5B3] hover:text-[#00B5B3] hover:bg-[#E0F7F7] border-[#00B5B3]"
+              >
+                <Plus className="w-4 h-4 mr-2" />
+                Save as Rule
+              </Button>
+            )}
+          </motion.div>
+        )}
+      </AnimatePresence>
+      
+      {/* Saved Rule Badge */}
+      <AnimatePresence>
+        {message.savedAsRule && message.savedRuleName && (
+          <motion.div 
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0 }}
+            className="mt-2"
+          >
+            <Badge className="bg-[#E0F7F7] text-[#00B5B3] border-0">
+              <Check className="w-3 h-3 mr-1" />
+              Saved as: {message.savedRuleName}
+            </Badge>
           </motion.div>
         )}
       </AnimatePresence>

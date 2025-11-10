@@ -1053,21 +1053,11 @@ export function AgenticChat() {
     
     setMessages([...currentMessages, timelineMsg]);
     
-    // Step 1: Execute SQL query (ActionStep with action)
-    await new Promise((resolve) => setTimeout(resolve, 600));
+    // Step 1: Planning/Thinking
+    await new Promise((resolve) => setTimeout(resolve, 500));
     
-    const step1Action = `result = sql_engine('''
-SELECT 
-  r.region_name,
-  SUM(rf.revenue) as total_revenue,
-  COUNT(DISTINCT rf.customer_id) as customer_count
-FROM revenue_fact rf
-JOIN region_dim r ON rf.region_id = r.region_id
-WHERE rf.date BETWEEN '2025-07-01' AND '2025-09-30'
-GROUP BY r.region_name
-ORDER BY total_revenue DESC
-''')`;
-
+    const step1Thinking = "I need to analyze Q3 2025 revenue by region. First, I'll query the revenue_fact and region_dim tables, joining them to get regional breakdowns. The date range will be July through September 2025.";
+    
     setMessages((prev) =>
       prev.map((m) =>
         m.id === msgId
@@ -1078,9 +1068,9 @@ ORDER BY total_revenue DESC
                 steps: [
                   {
                     step_number: 1,
-                    step_type: 'ActionStep' as const,
+                    step_type: 'PlanningStep' as const,
                     completed: false,
-                    action: step1Action,
+                    thinking: step1Thinking,
                     status: 'in-progress' as const,
                   },
                 ],
@@ -1090,10 +1080,64 @@ ORDER BY total_revenue DESC
       )
     );
     
-    // Step 1: Complete and show observations
+    await new Promise((resolve) => setTimeout(resolve, 800));
+    
+    setMessages((prev) =>
+      prev.map((m) =>
+        m.id === msgId
+          ? {
+              ...m,
+              timelineExecution: {
+                ...m.timelineExecution!,
+                steps: m.timelineExecution!.steps.map((s) =>
+                  s.step_number === 1 ? { ...s, completed: true, status: 'complete' as const } : s
+                ),
+              },
+            }
+          : m
+      )
+    );
+    
+    // Step 2: SQL Query Execution
+    await new Promise((resolve) => setTimeout(resolve, 600));
+    
+    const sqlQuery = `SELECT 
+  r.region_name,
+  SUM(rf.revenue) as total_revenue,
+  COUNT(DISTINCT rf.customer_id) as customer_count
+FROM revenue_fact rf
+JOIN region_dim r ON rf.region_id = r.region_id
+WHERE rf.date BETWEEN '2025-07-01' AND '2025-09-30'
+GROUP BY r.region_name
+ORDER BY total_revenue DESC`;
+
+    setMessages((prev) =>
+      prev.map((m) =>
+        m.id === msgId
+          ? {
+              ...m,
+              timelineExecution: {
+                ...m.timelineExecution!,
+                steps: [
+                  ...m.timelineExecution!.steps,
+                  {
+                    step_number: 2,
+                    step_type: 'SQLQueryStep' as const,
+                    completed: false,
+                    sql_query: sqlQuery,
+                    status: 'in-progress' as const,
+                  },
+                ],
+              },
+            }
+          : m
+      )
+    );
+    
+    // Step 2: Complete with JSON data
     await new Promise((resolve) => setTimeout(resolve, 1200));
     
-    const step1Observations = JSON.stringify([
+    const jsonData = JSON.stringify([
       { region_name: 'North America', total_revenue: 2450000, customer_count: 1523 },
       { region_name: 'Europe', total_revenue: 1890000, customer_count: 1247 },
       { region_name: 'Asia Pacific', total_revenue: 1650000, customer_count: 982 },
@@ -1108,12 +1152,20 @@ ORDER BY total_revenue DESC
               timelineExecution: {
                 ...m.timelineExecution!,
                 steps: [
+                  ...m.timelineExecution!.steps.slice(0, -1),
                   {
-                    step_number: 1,
-                    step_type: 'ActionStep' as const,
-                    completed: false,
-                    action: step1Action,
-                    observations: step1Observations,
+                    step_number: 2,
+                    step_type: 'SQLQueryStep' as const,
+                    completed: true,
+                    sql_query: sqlQuery,
+                    status: 'complete' as const,
+                  },
+                  {
+                    step_number: 3,
+                    step_type: 'DataResultStep' as const,
+                    completed: true,
+                    data: jsonData,
+                    data_format: 'json' as const,
                     status: 'complete' as const,
                   },
                 ],
@@ -1123,9 +1175,11 @@ ORDER BY total_revenue DESC
       )
     );
     
-    // Step 2: Planning step
+    // Step 4: Planning step - thinking about calculations
     await new Promise((resolve) => setTimeout(resolve, 800));
     
+    const step4Thinking = "Now I'll calculate the percentage contribution of each region to understand their relative importance to total revenue.";
+    
     setMessages((prev) =>
       prev.map((m) =>
         m.id === msgId
@@ -1136,9 +1190,10 @@ ORDER BY total_revenue DESC
                 steps: [
                   ...m.timelineExecution!.steps,
                   {
-                    step_number: 2,
+                    step_number: 4,
                     step_type: 'PlanningStep' as const,
                     completed: false,
+                    thinking: step4Thinking,
                     status: 'in-progress' as const,
                   },
                 ],
@@ -1148,8 +1203,7 @@ ORDER BY total_revenue DESC
       )
     );
     
-    // Step 2: Complete planning
-    await new Promise((resolve) => setTimeout(resolve, 1000));
+    await new Promise((resolve) => setTimeout(resolve, 700));
     
     setMessages((prev) =>
       prev.map((m) =>
@@ -1159,7 +1213,7 @@ ORDER BY total_revenue DESC
               timelineExecution: {
                 ...m.timelineExecution!,
                 steps: m.timelineExecution!.steps.map((s) =>
-                  s.step_number === 2 ? { ...s, completed: true, status: 'complete' as const } : s
+                  s.step_number === 4 ? { ...s, completed: true, status: 'complete' as const } : s
                 ),
               },
             }
@@ -1167,13 +1221,19 @@ ORDER BY total_revenue DESC
       )
     );
     
-    // Step 3: Calculate percentages (ActionStep)
+    // Step 5: Python code execution
     await new Promise((resolve) => setTimeout(resolve, 600));
     
-    const step3Action = `# Calculate percentage contribution
+    const pythonCode = `# Calculate percentage contribution
 total = sum(row['total_revenue'] for row in result)
 for row in result:
-    row['percentage'] = round((row['total_revenue'] / total) * 100, 1)`;
+    row['percentage'] = round((row['total_revenue'] / total) * 100, 1)
+
+# Format as CSV for reporting
+import csv
+output_csv = "region_name,total_revenue,customer_count,percentage\\n"
+for row in result:
+    output_csv += f"{row['region_name']},{row['total_revenue']},{row['customer_count']},{row['percentage']}%\\n"`;
     
     setMessages((prev) =>
       prev.map((m) =>
@@ -1185,10 +1245,10 @@ for row in result:
                 steps: [
                   ...m.timelineExecution!.steps,
                   {
-                    step_number: 3,
-                    step_type: 'ActionStep' as const,
+                    step_number: 5,
+                    step_type: 'PythonCodeStep' as const,
                     completed: false,
-                    action: step3Action,
+                    python_code: pythonCode,
                     status: 'in-progress' as const,
                   },
                 ],
@@ -1198,14 +1258,14 @@ for row in result:
       )
     );
     
-    // Step 3: Complete with observations
+    // Step 5: Complete with CSV data
     await new Promise((resolve) => setTimeout(resolve, 900));
     
-    const step3Observations = `Calculated percentages:
-- North America: 35.2%
-- Europe: 27.1%
-- Asia Pacific: 23.7%
-- Latin America: 12.8%`;
+    const csvData = `region_name,total_revenue,customer_count,percentage
+North America,2450000,1523,35.2%
+Europe,1890000,1247,27.1%
+Asia Pacific,1650000,982,23.7%
+Latin America,890000,456,12.8%`;
     
     setMessages((prev) =>
       prev.map((m) =>
@@ -1214,11 +1274,24 @@ for row in result:
               ...m,
               timelineExecution: {
                 ...m.timelineExecution!,
-                steps: m.timelineExecution!.steps.map((s) =>
-                  s.step_number === 3
-                    ? { ...s, completed: true, observations: step3Observations, status: 'complete' as const }
-                    : s
-                ),
+                steps: [
+                  ...m.timelineExecution!.steps.slice(0, -1),
+                  {
+                    step_number: 5,
+                    step_type: 'PythonCodeStep' as const,
+                    completed: true,
+                    python_code: pythonCode,
+                    status: 'complete' as const,
+                  },
+                  {
+                    step_number: 6,
+                    step_type: 'DataResultStep' as const,
+                    completed: true,
+                    data: csvData,
+                    data_format: 'csv' as const,
+                    status: 'complete' as const,
+                  },
+                ],
               },
             }
           : m
@@ -1236,7 +1309,7 @@ for row in result:
 **Asia Pacific** contributed $1.65M (23.7%) with 982 customers, while **Latin America** generated $890K (12.8%) from 456 customers.
 
 North America shows the strongest performance both in absolute revenue and customer engagement.`,
-      total_steps: 3,
+      total_steps: 6,
     };
     
     // Generate artifacts (SQL, Chart, Table)
@@ -1310,9 +1383,12 @@ ORDER BY total_revenue DESC`,
       ...timelineMsg,
       timelineExecution: {
         steps: [
-          { step_number: 1, step_type: 'ActionStep' as const, completed: true, action: step1Action, observations: step1Observations, status: 'complete' as const },
-          { step_number: 2, step_type: 'PlanningStep' as const, completed: true, status: 'complete' as const },
-          { step_number: 3, step_type: 'ActionStep' as const, completed: true, action: step3Action, observations: step3Observations, status: 'complete' as const },
+          { step_number: 1, step_type: 'PlanningStep' as const, completed: true, thinking: step1Thinking, status: 'complete' as const },
+          { step_number: 2, step_type: 'SQLQueryStep' as const, completed: true, sql_query: sqlQuery, status: 'complete' as const },
+          { step_number: 3, step_type: 'DataResultStep' as const, completed: true, data: jsonData, data_format: 'json' as const, status: 'complete' as const },
+          { step_number: 4, step_type: 'PlanningStep' as const, completed: true, thinking: step4Thinking, status: 'complete' as const },
+          { step_number: 5, step_type: 'PythonCodeStep' as const, completed: true, python_code: pythonCode, status: 'complete' as const },
+          { step_number: 6, step_type: 'DataResultStep' as const, completed: true, data: csvData, data_format: 'csv' as const, status: 'complete' as const },
         ],
         finalAnswer,
         isStreaming: false,

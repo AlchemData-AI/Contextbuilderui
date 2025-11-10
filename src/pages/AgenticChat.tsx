@@ -62,6 +62,7 @@ import { useRulesStore } from '../lib/rulesStore';
 import { useSidebar } from '../components/ChatLayout';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { Switch } from '../components/ui/switch';
+import { AgentExecutionTimeline } from '../components/AgentExecutionTimeline';
 
 // ═══════════════════════════════════════════════════════════════════
 // ANIMATION VARIANTS
@@ -158,6 +159,24 @@ interface Message {
   executionPhase?: 'planning' | 'coding' | 'fetching' | 'complete' | 'failed';
   executionLogs?: ExecutionLog[];
   executionExpanded?: boolean;
+  
+  // SSE Timeline execution (new default)
+  timelineExecution?: {
+    steps: Array<{
+      step_number: number;
+      step_type: 'ActionStep' | 'PlanningStep';
+      completed: boolean;
+      action?: string;
+      observations?: string;
+      status?: 'pending' | 'in-progress' | 'complete' | 'failed';
+      error?: string;
+    }>;
+    finalAnswer?: {
+      answer: string;
+      total_steps: number;
+    };
+    isStreaming?: boolean;
+  };
   
   artifacts?: Artifact[];
   showReviewButton?: boolean;
@@ -524,7 +543,8 @@ export function AgenticChat() {
     const isAnalysis = isAnalysisRequest(inputText);
 
     if (isAnalysis) {
-      await simulateAnalysisFlow(userMsg, newMessages, activeConvId);
+      // Use new timeline execution (SSE-style) by default
+      await simulateTimelineExecution(userMsg, newMessages, activeConvId);
     } else {
       await simulateRegularChat(userMsg, newMessages, activeConvId);
     }
@@ -1012,6 +1032,298 @@ export function AgenticChat() {
     };
 
     setMessages((prev) => [...prev, errorMsg]);
+  };
+
+  // NEW: Timeline-based execution (SSE-style streaming)
+  const simulateTimelineExecution = async (userMsg: Message, currentMessages: Message[], conversationId: string) => {
+    const baseId = Date.now();
+    const msgId = (baseId + 1).toString();
+    
+    // Create initial message with empty timeline
+    const timelineMsg: Message = {
+      id: msgId,
+      role: 'assistant',
+      content: '',
+      timestamp: new Date(),
+      timelineExecution: {
+        steps: [],
+        isStreaming: true,
+      },
+    };
+    
+    setMessages([...currentMessages, timelineMsg]);
+    
+    // Step 1: Execute SQL query (ActionStep with action)
+    await new Promise((resolve) => setTimeout(resolve, 600));
+    
+    const step1Action = `result = sql_engine('''
+SELECT 
+  r.region_name,
+  SUM(rf.revenue) as total_revenue,
+  COUNT(DISTINCT rf.customer_id) as customer_count
+FROM revenue_fact rf
+JOIN region_dim r ON rf.region_id = r.region_id
+WHERE rf.date BETWEEN '2025-07-01' AND '2025-09-30'
+GROUP BY r.region_name
+ORDER BY total_revenue DESC
+''')`;
+
+    setMessages((prev) =>
+      prev.map((m) =>
+        m.id === msgId
+          ? {
+              ...m,
+              timelineExecution: {
+                ...m.timelineExecution!,
+                steps: [
+                  {
+                    step_number: 1,
+                    step_type: 'ActionStep' as const,
+                    completed: false,
+                    action: step1Action,
+                    status: 'in-progress' as const,
+                  },
+                ],
+              },
+            }
+          : m
+      )
+    );
+    
+    // Step 1: Complete and show observations
+    await new Promise((resolve) => setTimeout(resolve, 1200));
+    
+    const step1Observations = JSON.stringify([
+      { region_name: 'North America', total_revenue: 2450000, customer_count: 1523 },
+      { region_name: 'Europe', total_revenue: 1890000, customer_count: 1247 },
+      { region_name: 'Asia Pacific', total_revenue: 1650000, customer_count: 982 },
+      { region_name: 'Latin America', total_revenue: 890000, customer_count: 456 },
+    ], null, 2);
+    
+    setMessages((prev) =>
+      prev.map((m) =>
+        m.id === msgId
+          ? {
+              ...m,
+              timelineExecution: {
+                ...m.timelineExecution!,
+                steps: [
+                  {
+                    step_number: 1,
+                    step_type: 'ActionStep' as const,
+                    completed: false,
+                    action: step1Action,
+                    observations: step1Observations,
+                    status: 'complete' as const,
+                  },
+                ],
+              },
+            }
+          : m
+      )
+    );
+    
+    // Step 2: Planning step
+    await new Promise((resolve) => setTimeout(resolve, 800));
+    
+    setMessages((prev) =>
+      prev.map((m) =>
+        m.id === msgId
+          ? {
+              ...m,
+              timelineExecution: {
+                ...m.timelineExecution!,
+                steps: [
+                  ...m.timelineExecution!.steps,
+                  {
+                    step_number: 2,
+                    step_type: 'PlanningStep' as const,
+                    completed: false,
+                    status: 'in-progress' as const,
+                  },
+                ],
+              },
+            }
+          : m
+      )
+    );
+    
+    // Step 2: Complete planning
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+    
+    setMessages((prev) =>
+      prev.map((m) =>
+        m.id === msgId
+          ? {
+              ...m,
+              timelineExecution: {
+                ...m.timelineExecution!,
+                steps: m.timelineExecution!.steps.map((s) =>
+                  s.step_number === 2 ? { ...s, completed: true, status: 'complete' as const } : s
+                ),
+              },
+            }
+          : m
+      )
+    );
+    
+    // Step 3: Calculate percentages (ActionStep)
+    await new Promise((resolve) => setTimeout(resolve, 600));
+    
+    const step3Action = `# Calculate percentage contribution
+total = sum(row['total_revenue'] for row in result)
+for row in result:
+    row['percentage'] = round((row['total_revenue'] / total) * 100, 1)`;
+    
+    setMessages((prev) =>
+      prev.map((m) =>
+        m.id === msgId
+          ? {
+              ...m,
+              timelineExecution: {
+                ...m.timelineExecution!,
+                steps: [
+                  ...m.timelineExecution!.steps,
+                  {
+                    step_number: 3,
+                    step_type: 'ActionStep' as const,
+                    completed: false,
+                    action: step3Action,
+                    status: 'in-progress' as const,
+                  },
+                ],
+              },
+            }
+          : m
+      )
+    );
+    
+    // Step 3: Complete with observations
+    await new Promise((resolve) => setTimeout(resolve, 900));
+    
+    const step3Observations = `Calculated percentages:
+- North America: 35.2%
+- Europe: 27.1%
+- Asia Pacific: 23.7%
+- Latin America: 12.8%`;
+    
+    setMessages((prev) =>
+      prev.map((m) =>
+        m.id === msgId
+          ? {
+              ...m,
+              timelineExecution: {
+                ...m.timelineExecution!,
+                steps: m.timelineExecution!.steps.map((s) =>
+                  s.step_number === 3
+                    ? { ...s, completed: true, observations: step3Observations, status: 'complete' as const }
+                    : s
+                ),
+              },
+            }
+          : m
+      )
+    );
+    
+    // Final answer with artifacts
+    await new Promise((resolve) => setTimeout(resolve, 800));
+    
+    const finalAnswer = {
+      answer: `Based on Q3 2025 data, here's the regional revenue breakdown:
+
+**North America** leads with $2.45M (35.2% of total revenue) from 1,523 customers, followed by **Europe** at $1.89M (27.1%) with 1,247 customers.
+
+**Asia Pacific** contributed $1.65M (23.7%) with 982 customers, while **Latin America** generated $890K (12.8%) from 456 customers.
+
+North America shows the strongest performance both in absolute revenue and customer engagement.`,
+      total_steps: 3,
+    };
+    
+    // Generate artifacts (SQL, Chart, Table)
+    const artifacts: Artifact[] = [
+      {
+        type: 'sql',
+        query: `SELECT 
+  r.region_name,
+  SUM(rf.revenue) as total_revenue,
+  COUNT(DISTINCT rf.customer_id) as customer_count
+FROM revenue_fact rf
+JOIN region_dim r ON rf.region_id = r.region_id
+WHERE rf.date BETWEEN '2025-07-01' AND '2025-09-30'
+GROUP BY r.region_name
+ORDER BY total_revenue DESC`,
+        trustLevel: 'new',
+        lastExecuted: 'Just now',
+        rowsReturned: 4,
+      },
+      {
+        type: 'chart',
+        chartType: 'bar',
+        title: 'Q3 2025 Revenue by Region',
+        data: [
+          { region: 'North America', revenue: 2450000 },
+          { region: 'Europe', revenue: 1890000 },
+          { region: 'Asia Pacific', revenue: 1650000 },
+          { region: 'Latin America', revenue: 890000 },
+        ],
+        xAxis: 'region',
+        yAxis: 'revenue',
+        insights: [
+          'North America leads with 35.2% of total revenue',
+          'Combined revenue across all regions: $6.88M',
+          'Average revenue per region: $1.72M',
+        ],
+      },
+      {
+        type: 'table',
+        title: 'Regional Performance Summary',
+        columns: ['Region', 'Revenue', 'Customers', 'Percentage'],
+        rows: [
+          ['North America', '$2.45M', '1,523', '35.2%'],
+          ['Europe', '$1.89M', '1,247', '27.1%'],
+          ['Asia Pacific', '$1.65M', '982', '23.7%'],
+          ['Latin America', '$890K', '456', '12.8%'],
+        ],
+        totalRows: 4,
+      },
+    ];
+    
+    setMessages((prev) =>
+      prev.map((m) =>
+        m.id === msgId
+          ? {
+              ...m,
+              timelineExecution: {
+                ...m.timelineExecution!,
+                finalAnswer,
+                isStreaming: false,
+              },
+              artifacts,
+              showReviewButton: true,
+            }
+          : m
+      )
+    );
+    
+    // Save to store
+    const finalMessage = {
+      ...timelineMsg,
+      timelineExecution: {
+        steps: [
+          { step_number: 1, step_type: 'ActionStep' as const, completed: true, action: step1Action, observations: step1Observations, status: 'complete' as const },
+          { step_number: 2, step_type: 'PlanningStep' as const, completed: true, status: 'complete' as const },
+          { step_number: 3, step_type: 'ActionStep' as const, completed: true, action: step3Action, observations: step3Observations, status: 'complete' as const },
+        ],
+        finalAnswer,
+        isStreaming: false,
+      },
+      artifacts,
+      showReviewButton: true,
+    };
+    
+    if (conversationId !== 'new') {
+      addMessageToStore(conversationId, finalMessage as any);
+    }
   };
 
   const simulateAnalysisFlow = async (userMsg: Message, currentMessages: Message[], conversationId: string) => {
@@ -2302,6 +2614,7 @@ function MessageComponent({
   onToggleThinking,
   onEditSql,
   onApprovePlan,
+  onSaveAsRule,
   analysisMessageRef,
   planGenerationRef,
 }: {
@@ -2312,6 +2625,7 @@ function MessageComponent({
   onToggleThinking: (msgId: string) => void;
   onEditSql: (logId: string, sql: string) => void;
   onApprovePlan: (msgId: string) => void;
+  onSaveAsRule?: (msgId: string) => void;
   analysisMessageRef?: React.RefObject<HTMLDivElement>;
   planGenerationRef?: React.RefObject<HTMLDivElement>;
 }) {
@@ -2524,9 +2838,27 @@ function MessageComponent({
         )}
       </AnimatePresence>
 
-      {/* Execution Logs - Minimal style */}
+      {/* Timeline Execution - NEW SSE-style */}
       <AnimatePresence>
-        {message.executionLogs && message.executionLogs.length > 0 && (
+        {message.timelineExecution && (
+          <motion.div 
+            ref={analysisMessageRef}
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+          >
+            <AgentExecutionTimeline
+              steps={message.timelineExecution.steps}
+              finalAnswer={message.timelineExecution.finalAnswer}
+              isStreaming={message.timelineExecution.isStreaming}
+            />
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Execution Logs - Minimal style (legacy) */}
+      <AnimatePresence>
+        {!message.timelineExecution && message.executionLogs && message.executionLogs.length > 0 && (
           <motion.div 
             ref={analysisMessageRef}
             initial={{ opacity: 0, y: 10 }}

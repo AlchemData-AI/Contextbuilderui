@@ -493,6 +493,10 @@
     top: calc(var(--spacing) * 4);
   }
 
+  .top-6 {
+    top: calc(var(--spacing) * 6);
+  }
+
   .top-10 {
     top: calc(var(--spacing) * 10);
   }
@@ -565,6 +569,10 @@
     left: 280px;
   }
 
+  .z-10 {
+    z-index: 10;
+  }
+
   .z-20 {
     z-index: 20;
   }
@@ -599,6 +607,10 @@
 
   .mx-1 {
     margin-inline: calc(var(--spacing) * 1);
+  }
+
+  .mx-2 {
+    margin-inline: calc(var(--spacing) * 2);
   }
 
   .mx-4 {
@@ -667,10 +679,6 @@
 
   .mr-2 {
     margin-right: calc(var(--spacing) * 2);
-  }
-
-  .mr-4 {
-    margin-right: calc(var(--spacing) * 4);
   }
 
   .mr-\[480px\] {
@@ -1189,10 +1197,6 @@
     width: 320px;
   }
 
-  .w-\[400px\] {
-    width: 400px;
-  }
-
   .w-\[480px\] {
     width: 480px;
   }
@@ -1231,10 +1235,6 @@
 
   .max-w-7xl {
     max-width: var(--container-7xl);
-  }
-
-  .max-w-\[80\%\] {
-    max-width: 80%;
   }
 
   .max-w-\[85\%\] {
@@ -1492,6 +1492,10 @@
 
   .gap-2 {
     gap: calc(var(--spacing) * 2);
+  }
+
+  .gap-2\.5 {
+    gap: calc(var(--spacing) * 2.5);
   }
 
   .gap-3 {
@@ -1781,6 +1785,10 @@
     border-color: #ff9500;
   }
 
+  .border-\[\#FFCDD2\] {
+    border-color: #ffcdd2;
+  }
+
   .border-\[\#FFD666\] {
     border-color: #ffd666;
   }
@@ -1833,6 +1841,14 @@
     background-color: #4caf50;
   }
 
+  .bg-\[\#6B7280\]\/10 {
+    background-color: oklab(55.1019% -.00229418 -.023248 / .1);
+  }
+
+  .bg-\[\#10B981\]\/10 {
+    background-color: oklab(69.5873% -.142158 .0448781 / .1);
+  }
+
   .bg-\[\#0066CC\] {
     background-color: #06c;
   }
@@ -1855,6 +1871,10 @@
 
   .bg-\[\#DDDDDD\] {
     background-color: #ddd;
+  }
+
+  .bg-\[\#E0E0E0\] {
+    background-color: #e0e0e0;
   }
 
   .bg-\[\#E0F7F7\] {
@@ -1893,10 +1913,6 @@
     background-color: #f0fffe;
   }
 
-  .bg-\[\#F1F8F4\] {
-    background-color: #f1f8f4;
-  }
-
   .bg-\[\#F3F4F6\] {
     background-color: #f3f4f6;
   }
@@ -1919,6 +1935,10 @@
 
   .bg-\[\#F9FFFD\] {
     background-color: #f9fffd;
+  }
+
+  .bg-\[\#F44336\] {
+    background-color: #f44336;
   }
 
   .bg-\[\#F79009\] {
@@ -2137,6 +2157,11 @@
     --tw-gradient-stops: var(--tw-gradient-via-stops, var(--tw-gradient-position), var(--tw-gradient-from) var(--tw-gradient-from-position), var(--tw-gradient-to) var(--tw-gradient-to-position));
   }
 
+  .from-\[\#F9FAFB\] {
+    --tw-gradient-from: #f9fafb;
+    --tw-gradient-stops: var(--tw-gradient-via-stops, var(--tw-gradient-position), var(--tw-gradient-from) var(--tw-gradient-from-position), var(--tw-gradient-to) var(--tw-gradient-to-position));
+  }
+
   .from-\[\#F79009\] {
     --tw-gradient-from: #f79009;
     --tw-gradient-stops: var(--tw-gradient-via-stops, var(--tw-gradient-position), var(--tw-gradient-from) var(--tw-gradient-from-position), var(--tw-gradient-to) var(--tw-gradient-to-position));
@@ -2159,6 +2184,11 @@
 
   .to-\[\#F0FFFE\] {
     --tw-gradient-to: #f0fffe;
+    --tw-gradient-stops: var(--tw-gradient-via-stops, var(--tw-gradient-position), var(--tw-gradient-from) var(--tw-gradient-from-position), var(--tw-gradient-to) var(--tw-gradient-to-position));
+  }
+
+  .to-\[\#F3F4F6\] {
+    --tw-gradient-to: #f3f4f6;
     --tw-gradient-stops: var(--tw-gradient-via-stops, var(--tw-gradient-position), var(--tw-gradient-from) var(--tw-gradient-from-position), var(--tw-gradient-to) var(--tw-gradient-to-position));
   }
 
@@ -2325,6 +2355,10 @@
 
   .py-\[0px\] {
     padding-block: 0;
+  }
+
+  .pt-0\.5 {
+    padding-top: calc(var(--spacing) * .5);
   }
 
   .pt-1 {
@@ -2557,6 +2591,10 @@
     text-wrap: balance;
   }
 
+  .break-words {
+    overflow-wrap: break-word;
+  }
+
   .whitespace-nowrap {
     white-space: nowrap;
   }
@@ -2663,6 +2701,10 @@
 
   .text-\[\#BBBBBB\] {
     color: #bbb;
+  }
+
+  .text-\[\#C62828\] {
+    color: #c62828;
   }
 
   .text-\[\#CCCCCC\] {
@@ -3108,6 +3150,10 @@
     border-width: 0;
   }
 
+  .last\:pb-0:last-child {
+    padding-bottom: calc(var(--spacing) * 0);
+  }
+
   @media (hover: hover) {
     .hover\:border-\[\#00B5B3\]:hover {
       border-color: #00b5b3;
@@ -3423,6 +3469,20 @@
       .hover\:bg-white\/90:hover {
         background-color: color-mix(in oklab, var(--color-white) 90%, transparent);
       }
+    }
+  }
+
+  @media (hover: hover) {
+    .hover\:from-\[\#F3F4F6\]:hover {
+      --tw-gradient-from: #f3f4f6;
+      --tw-gradient-stops: var(--tw-gradient-via-stops, var(--tw-gradient-position), var(--tw-gradient-from) var(--tw-gradient-from-position), var(--tw-gradient-to) var(--tw-gradient-to-position));
+    }
+  }
+
+  @media (hover: hover) {
+    .hover\:to-\[\#E5E7EB\]:hover {
+      --tw-gradient-to: #e5e7eb;
+      --tw-gradient-stops: var(--tw-gradient-via-stops, var(--tw-gradient-position), var(--tw-gradient-from) var(--tw-gradient-from-position), var(--tw-gradient-to) var(--tw-gradient-to-position));
     }
   }
 

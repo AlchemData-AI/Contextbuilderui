@@ -95,6 +95,27 @@ export function WizardChat({
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
+  // Reset chat when taskTitle or initialPrompt changes (new conversation)
+  useEffect(() => {
+    if (initialPrompt) {
+      setMessages([
+        {
+          id: Date.now().toString(),
+          role: 'assistant',
+          content: initialPrompt,
+          timestamp: new Date(),
+        },
+      ]);
+    } else {
+      setMessages([]);
+    }
+    setInput('');
+    setIsLoading(false);
+    setShowConfirmButton(false);
+    setExtractedValue('');
+    setIsConfirmed(false);
+  }, [taskTitle, initialPrompt]);
+
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);

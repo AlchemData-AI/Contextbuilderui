@@ -174,6 +174,13 @@ interface Message {
     finalAnswer?: {
       answer: string;
       total_steps: number;
+      trustLevel?: 'trusted' | 'team-validated' | 'new';
+      trustBreakdown?: {
+        goldenQueryPercentage: number;
+        semanticModelPercentage: number;
+        goldenQueryComponents: string[];
+        semanticModelComponents: string[];
+      };
     };
     isStreaming?: boolean;
   };
@@ -1310,6 +1317,20 @@ Latin America,890000,456,12.8%`;
 
 North America shows the strongest performance both in absolute revenue and customer engagement.`,
       total_steps: 6,
+      trustLevel: 'trusted' as const,
+      trustBreakdown: {
+        goldenQueryPercentage: 70,
+        semanticModelPercentage: 30,
+        goldenQueryComponents: [
+          'Base revenue calculation',
+          'Regional grouping logic',
+          'Customer count aggregation'
+        ],
+        semanticModelComponents: [
+          'Q3 2025 date filtering',
+          'Column selection and naming'
+        ]
+      }
     };
     
     // Generate artifacts (SQL, Chart, Table)
@@ -2158,7 +2179,7 @@ ORDER BY total_revenue DESC`;
     setRuleMessageId(null);
   };
 
-  // ════════════════════════════════════════════════════��══════════
+  // ═══════════════════════���════════════════════════════��══════════
   // RENDER
   // ═══════════════��═══════════════════════════════════════════════
 
@@ -3436,6 +3457,18 @@ function ArtifactViewer({
           <div className="flex items-center gap-2 mb-2">
             <h3 className="font-medium text-[#333333]">SQL Query</h3>
             <TrustBadge level={artifact.trustLevel} validator={artifact.validatedBy} />
+            {artifact.trustLevel === 'trusted' && (
+              <motion.div
+                initial={{ scale: 0 }}
+                animate={{ scale: 1 }}
+                transition={{ type: 'spring', damping: 15, delay: 0.1 }}
+              >
+                <Badge className="bg-[#E8F5E9] text-[#2E7D32] border border-[#4CAF50]/20 text-xs font-medium">
+                  <CheckCircle className="w-3 h-3 mr-1" />
+                  100% Confidence
+                </Badge>
+              </motion.div>
+            )}
             {isEditing && (
               <Badge className="bg-[#FF9900] hover:bg-[#FF9900] text-white text-xs">
                 Editing
@@ -3445,6 +3478,12 @@ function ArtifactViewer({
           {artifact.validatedBy && (
             <p className="text-xs text-[#666666]">
               Validated by: {artifact.validatedBy} ({artifact.validatedDate})
+            </p>
+          )}
+          {artifact.trustLevel === 'trusted' && (
+            <p className="text-xs text-[#4CAF50] mt-1 flex items-center gap-1">
+              <Shield className="w-3 h-3" />
+              This analysis was generated using a trusted query from the Golden Set with verified accuracy
             </p>
           )}
         </div>
@@ -3564,16 +3603,16 @@ function ArtifactViewer({
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="h-full flex flex-col border border-[#E5E7EB] rounded-lg p-4"
+        className="h-full flex flex-col border border-[#E5E7EB] rounded-lg p-4 overflow-y-auto"
       >
-        <h3 className="font-medium text-[#333333] mb-4">{artifact.title}</h3>
+        <h3 className="font-medium text-[#333333] mb-3">{artifact.title}</h3>
 
-        <div className="border border-[#EEEEEE] rounded-lg p-6 mb-4 flex-1">
+        <div className="border border-[#EEEEEE] rounded-lg p-4 mb-3" style={{ height: '280px' }}>
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={artifact.data}>
               <CartesianGrid strokeDasharray="3 3" stroke="#EEEEEE" />
-              <XAxis dataKey="region" />
-              <YAxis />
+              <XAxis dataKey="region" tick={{ fontSize: 12 }} />
+              <YAxis tick={{ fontSize: 12 }} />
               <RechartsTooltip />
               <Bar 
                 dataKey="revenue" 
@@ -3587,16 +3626,16 @@ function ArtifactViewer({
 
         {/* Chart Insights */}
         {artifact.insights && artifact.insights.length > 0 && (
-          <div className="mb-4 p-4 rounded-lg bg-[#F9FAFB] border border-[#E5E7EB]">
-            <h4 className="text-sm font-medium text-[#374151] mb-2">Key Insights 💡</h4>
-            <ul className="space-y-1.5">
+          <div className="mb-3 p-3 rounded-lg bg-[#F9FAFB] border border-[#E5E7EB]">
+            <h4 className="text-xs font-medium text-[#374151] mb-2">Key Insights 💡</h4>
+            <ul className="space-y-1">
               {artifact.insights.map((insight, idx) => (
                 <motion.li 
                   key={idx}
                   initial={{ opacity: 0, x: -10 }}
                   animate={{ opacity: 1, x: 0 }}
                   transition={{ delay: idx * 0.1 }}
-                  className="text-sm text-[#6B7280]"
+                  className="text-xs text-[#6B7280]"
                 >
                   {insight}
                 </motion.li>
@@ -3605,20 +3644,20 @@ function ArtifactViewer({
           </div>
         )}
 
-        <div className="space-y-3">
-          <Button variant="outline" className="w-full">
+        <div className="space-y-2">
+          <Button variant="outline" className="w-full h-9 text-sm">
             Download as PNG, SVG, or PDF
             <Download className="w-4 h-4 ml-2" />
           </Button>
 
-          <div className="text-sm space-y-2 border-t border-[#EEEEEE] pt-4">
+          <div className="text-sm space-y-2 border-t border-[#EEEEEE] pt-3">
             <div>
               <p className="text-xs text-[#999999]">Chart Type</p>
-              <p className="text-[#333333] capitalize">{artifact.chartType}</p>
+              <p className="text-[#333333] text-sm capitalize">{artifact.chartType}</p>
             </div>
             <div>
               <p className="text-xs text-[#999999]">Data Points</p>
-              <p className="text-[#333333]">{artifact.data.length}</p>
+              <p className="text-[#333333] text-sm">{artifact.data.length}</p>
             </div>
           </div>
         </div>

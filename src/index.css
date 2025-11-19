@@ -113,6 +113,7 @@
     --font-weight-normal: 400;
     --font-weight-medium: 500;
     --font-weight-semibold: 600;
+    --font-weight-bold: 700;
     --tracking-wide: .025em;
     --tracking-wider: .05em;
     --tracking-widest: .1em;
@@ -606,6 +607,10 @@
     margin-inline: calc(var(--spacing) * -1);
   }
 
+  .-mx-6 {
+    margin-inline: calc(var(--spacing) * -6);
+  }
+
   .mx-1 {
     margin-inline: calc(var(--spacing) * 1);
   }
@@ -950,6 +955,10 @@
     height: calc(100% - 1px);
   }
 
+  .h-\[calc\(100vh-200px\)\] {
+    height: calc(100vh - 200px);
+  }
+
   .h-\[calc\(100vh-380px\)\] {
     height: calc(100vh - 380px);
   }
@@ -1134,6 +1143,10 @@
     width: calc(var(--spacing) * 56);
   }
 
+  .w-64 {
+    width: calc(var(--spacing) * 64);
+  }
+
   .w-80 {
     width: calc(var(--spacing) * 80);
   }
@@ -1238,6 +1251,10 @@
     max-width: var(--container-7xl);
   }
 
+  .max-w-\[80\%\] {
+    max-width: 80%;
+  }
+
   .max-w-\[85\%\] {
     max-width: 85%;
   }
@@ -1318,6 +1335,10 @@
     transform-origin: var(--radix-dropdown-menu-content-transform-origin);
   }
 
+  .origin-\(--radix-hover-card-content-transform-origin\) {
+    transform-origin: var(--radix-hover-card-content-transform-origin);
+  }
+
   .origin-\(--radix-select-content-transform-origin\) {
     transform-origin: var(--radix-select-content-transform-origin);
   }
@@ -1385,6 +1406,10 @@
 
   .cursor-default {
     cursor: default;
+  }
+
+  .cursor-help {
+    cursor: help;
   }
 
   .cursor-pointer {
@@ -1726,6 +1751,10 @@
     border-color: #4caf50;
   }
 
+  .border-\[\#4CAF50\]\/20 {
+    border-color: oklab(67.3098% -.131765 .0950027 / .2);
+  }
+
   .border-\[\#8B5CF6\]\/20 {
     border-color: oklab(60.5631% .0845415 -.201932 / .2);
   }
@@ -2024,6 +2053,10 @@
 
   .bg-\[\#FF9900\] {
     background-color: #f90;
+  }
+
+  .bg-\[\#FFD700\] {
+    background-color: gold;
   }
 
   .bg-\[\#FFE6E6\] {
@@ -2597,6 +2630,11 @@
     line-height: var(--leading-relaxed);
   }
 
+  .font-bold {
+    --tw-font-weight: var(--font-weight-bold);
+    font-weight: var(--font-weight-bold);
+  }
+
   .font-light {
     --tw-font-weight: var(--font-weight-light);
     font-weight: var(--font-weight-light);
@@ -2711,6 +2749,10 @@
     color: #065f46;
   }
 
+  .text-\[\#333\] {
+    color: #333;
+  }
+
   .text-\[\#991B1B\] {
     color: #991b1b;
   }
@@ -2809,6 +2851,10 @@
 
   .text-\[\#FF9900\] {
     color: #f90;
+  }
+
+  .text-\[\#FFD700\] {
+    color: gold;
   }
 
   .text-amber-600 {
@@ -3401,6 +3447,12 @@
   @media (hover: hover) {
     .hover\:bg-\[\#FFCDD2\]:hover {
       background-color: #ffcdd2;
+    }
+  }
+
+  @media (hover: hover) {
+    .hover\:bg-\[\#FFD700\]:hover {
+      background-color: gold;
     }
   }
 

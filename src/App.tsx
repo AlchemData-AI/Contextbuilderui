@@ -1,22 +1,21 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from './components/ui/sonner';
-import { Layout } from './components/Layout';
-import { ChatLayout } from './components/ChatLayout';
-import { ProtectedRoute } from './components/ProtectedRoute';
 import { Login } from './pages/Login';
 import { Onboarding } from './pages/Onboarding';
-import { AgentsDashboard } from './pages/AgentsDashboard';
-import { AgentDetails } from './pages/AgentDetails';
-import { AgentExtension } from './pages/AgentExtension';
+import { ChatLayout } from './components/ChatLayout';
 import { DataSources } from './pages/DataSources';
 import { Documentation } from './pages/Documentation';
 import { Settings } from './pages/Settings';
+import { AgentsDashboard } from './pages/AgentsDashboard';
+import { AgentDetails } from './pages/AgentDetails';
+import { AgentExtension } from './pages/AgentExtension';
 import { Step1SelectTables } from './pages/wizard/Step1SelectTables';
 import { Step2PersonaDefinition } from './pages/wizard/Step2PersonaDefinition';
 import { Step3RunAnalysis } from './pages/wizard/Step3RunAnalysis';
 import { Step4AnalysisValidation } from './pages/wizard/Step4AnalysisValidation';
 import { Step5ConfigureRelationships } from './pages/wizard/Step5ConfigureRelationships';
 import { Step5SampleQueriesMetrics } from './pages/wizard/Step5SampleQueriesMetrics';
+import { Step6ContextReview } from './pages/wizard/Step6ContextReview';
 import { Step6ReviewPublish } from './pages/wizard/Step6ReviewPublish';
 import { Step8AgentRelationships } from './pages/wizard/Step8AgentRelationships';
 import { PublishSuccess } from './pages/wizard/PublishSuccess';
@@ -28,7 +27,8 @@ import { ChatWelcome } from './pages/ChatWelcome';
 import { Rules } from './pages/Rules';
 import SQLWorkbench from './pages/SQLWorkbench';
 import DataCatalog from './pages/DataCatalog';
-import { useAuthStore, hasPermission } from './lib/authStore';
+import { useAuthStore } from './lib/authStore';
+import { ProtectedRoute } from './components/ProtectedRoute';
 
 // Root redirect - everyone goes to chat home or onboarding
 function RootRedirect() {
@@ -182,12 +182,20 @@ export default function App() {
           path="agents/create/step-7"
           element={
             <ProtectedRoute requiredPermission="canCreateAgents">
-              <Step6ReviewPublish />
+              <Step6ContextReview />
             </ProtectedRoute>
           }
         />
         <Route
           path="agents/create/step-8"
+          element={
+            <ProtectedRoute requiredPermission="canCreateAgents">
+              <Step6ReviewPublish />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="agents/create/step-9"
           element={
             <ProtectedRoute requiredPermission="canCreateAgents">
               <Step8AgentRelationships />
@@ -240,12 +248,20 @@ export default function App() {
           path="agents/:agentId/edit/step-6"
           element={
             <ProtectedRoute requiredPermission="canEditAgents">
-              <Step6ReviewPublish />
+              <Step6ContextReview />
             </ProtectedRoute>
           }
         />
         <Route
           path="agents/:agentId/edit/step-7"
+          element={
+            <ProtectedRoute requiredPermission="canEditAgents">
+              <Step6ReviewPublish />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="agents/:agentId/edit/step-8"
           element={
             <ProtectedRoute requiredPermission="canEditAgents">
               <Step8AgentRelationships />

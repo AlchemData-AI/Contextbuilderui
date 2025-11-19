@@ -73,20 +73,21 @@ export function Step6ReviewPublish() {
     
     // Simulate publishing
     setTimeout(() => {
-      // Navigate to step 8 - Agent Relationships (Advanced)
-      navigate('/agents/create/step-8');
+      toast.success('Agent published successfully!');
+      // Navigate to Agent Relationships (optional advanced step)
+      navigate('/agents/create/step-9');
     }, 2000);
   };
 
   return (
     <WizardLayout
       currentStep={7}
-      totalSteps={7}
+      totalSteps={8}
       title="Review & Publish"
-      onBack={() => navigate('/agents/create/step-6')}
+      onBack={() => navigate('/agents/create/step-7')}
       onSaveDraft={() => {
         localStorage.setItem('wizardDraft', JSON.stringify({ 
-          step: 6, 
+          step: 7, 
           agentName, 
           agentDescription 
         }));

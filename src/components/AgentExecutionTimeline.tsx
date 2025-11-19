@@ -1,7 +1,13 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Loader2, CheckCircle, Circle, XCircle, Brain, ChevronDown, ChevronRight, Code, FileText, Database, TableIcon, Lightbulb } from 'lucide-react';
+import { Loader2, CheckCircle, Circle, XCircle, Brain, ChevronDown, ChevronRight, Code, FileText, Database, TableIcon, Lightbulb, Shield, Sparkles } from 'lucide-react';
 import { cn } from './ui/utils';
+import { Badge } from './ui/badge';
+import {
+  HoverCard,
+  HoverCardContent,
+  HoverCardTrigger,
+} from './ui/hover-card';
 
 // ═══════════════════════════════════════════════════════════════════
 // TYPES
@@ -40,6 +46,13 @@ export interface ExecutionStep {
 export interface FinalAnswer {
   answer: string;
   total_steps: number;
+  trustLevel?: 'trusted' | 'team-validated' | 'new';
+  trustBreakdown?: {
+    goldenQueryPercentage: number;
+    semanticModelPercentage: number;
+    goldenQueryComponents: string[];
+    semanticModelComponents: string[];
+  };
 }
 
 interface AgentExecutionTimelineProps {
@@ -519,9 +532,78 @@ export function AgentExecutionTimeline({
           transition={{ duration: 0.3, delay: 0.2 }}
           className="mt-6 pt-6 border-t border-[#EEEEEE]"
         >
-          <div className="flex items-start gap-2 mb-2">
-            <CheckCircle className="w-4 h-4 text-[#4CAF50] mt-0.5 flex-shrink-0" />
+          <div className="flex items-center gap-2 mb-2">
+            <CheckCircle className="w-4 h-4 text-[#4CAF50] flex-shrink-0" />
             <span className="text-sm text-[#4CAF50]">Analysis Complete</span>
+            
+            {/* Trust Badge with Hover Tooltip */}
+            {finalAnswer.trustLevel === 'trusted' && finalAnswer.trustBreakdown && (
+              <HoverCard>
+                <HoverCardTrigger asChild>
+                  <motion.div
+                    initial={{ scale: 0 }}
+                    animate={{ scale: 1 }}
+                    transition={{ type: 'spring', damping: 15, delay: 0.3 }}
+                  >
+                    <Badge className="bg-[#00B98E] hover:bg-[#00B98E] text-white text-xs cursor-help inline-flex items-center align-middle">
+                      ✓ Trusted Query
+                    </Badge>
+                  </motion.div>
+                </HoverCardTrigger>
+                <HoverCardContent className="w-80 p-4" side="right">
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-2">
+                      <Shield className="w-4 h-4 text-[#00B98E]" />
+                      <h4 className="font-medium text-sm text-[#333333]">Trusted Query Breakdown</h4>
+                    </div>
+                    
+                    <div className="h-px bg-[#E5E7EB]" />
+                    
+                    {/* Golden Query Section */}
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-1.5">
+                          <Sparkles className="w-3.5 h-3.5 text-[#FFD700]" />
+                          <span className="text-xs font-medium text-[#333333]">Golden Query</span>
+                        </div>
+                        <span className="text-xs font-bold text-[#00B98E]">
+                          {finalAnswer.trustBreakdown.goldenQueryPercentage}%
+                        </span>
+                      </div>
+                      <ul className="space-y-1 pl-5">
+                        {finalAnswer.trustBreakdown.goldenQueryComponents.map((component, idx) => (
+                          <li key={idx} className="text-xs text-[#666666] list-disc">
+                            {component}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                    
+                    {/* Semantic Model Section */}
+                    {finalAnswer.trustBreakdown.semanticModelPercentage > 0 && (
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-1.5">
+                            <Brain className="w-3.5 h-3.5 text-[#00B5B3]" />
+                            <span className="text-xs font-medium text-[#333333]">Semantic Model</span>
+                          </div>
+                          <span className="text-xs font-bold text-[#00B5B3]">
+                            {finalAnswer.trustBreakdown.semanticModelPercentage}%
+                          </span>
+                        </div>
+                        <ul className="space-y-1 pl-5">
+                          {finalAnswer.trustBreakdown.semanticModelComponents.map((component, idx) => (
+                            <li key={idx} className="text-xs text-[#666666] list-disc">
+                              {component}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                  </div>
+                </HoverCardContent>
+              </HoverCard>
+            )}
           </div>
           <div className="pl-6">
             <p className="text-sm text-[#333333] leading-relaxed whitespace-pre-wrap">

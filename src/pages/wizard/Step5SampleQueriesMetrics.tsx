@@ -255,7 +255,7 @@ export function Step5SampleQueriesMetrics() {
     }));
     
     toast.success('Queries and metrics validated');
-    navigate('/agents/create/step-7'); // Now step 7 is Review & Publish
+    navigate('/agents/create/step-7'); // Now step 7 is Context Review
   };
 
   const getStatusLabel = (status: string) => {
@@ -641,7 +641,7 @@ export function Step5SampleQueriesMetrics() {
     <WizardLayout
       title="Configure Sample Queries & Metrics"
       currentStep={6}
-      totalSteps={7}
+      totalSteps={8}
       onBack={() => navigate('/agents/create/step-5')}
       onSaveDraft={() => {
         localStorage.setItem(

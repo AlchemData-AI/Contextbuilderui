@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { WizardLayout } from '../../components/wizard/WizardLayout';
 import { TwoPanelWizardLayout, PanelItem } from '../../components/wizard/TwoPanelWizardLayout';
@@ -6,14 +6,12 @@ import { WizardChat } from '../../components/wizard/WizardChat';
 import { Button } from '../../components/ui/button';
 import { Badge } from '../../components/ui/badge';
 import { Card } from '../../components/ui/card';
-import { Progress } from '../../components/ui/progress';
 import { ScrollArea } from '../../components/ui/scroll-area';
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '../../components/ui/collapsible';
 import { Label } from '../../components/ui/label';
 import { Textarea } from '../../components/ui/textarea';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '../../components/ui/dialog';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../../components/ui/tooltip';
-import { ChevronRight, Check, MessageSquare, TrendingUp, CheckCircle2, XCircle, Code, Edit2, Loader2, Terminal, ChevronDown } from 'lucide-react';
+import { ChevronRight, MessageSquare, TrendingUp, CheckCircle2, XCircle, Code, Edit2, Loader2, Brain } from 'lucide-react';
 import { toast } from 'sonner@2.0.3';
 
 type ItemType = 'query' | 'metric';
@@ -30,58 +28,34 @@ interface QueryOrMetricItem {
   status: 'pending' | 'approved' | 'rejected' | 'modified';
 }
 
-interface ProcessingTask {
+interface ThinkingLog {
   id: string;
-  label: string;
-  status: 'pending' | 'running' | 'complete';
-  progress: number;
-  logs: string[];
-  duration?: string;
+  timestamp: Date;
+  message: string;
+  type: 'thinking' | 'action' | 'complete';
 }
 
-const PROCESSING_TASKS: ProcessingTask[] = [
-  { id: '1', label: 'Analyzing business context', status: 'pending', progress: 0, logs: [] },
-  { id: '2', label: 'Generating sample queries', status: 'pending', progress: 0, logs: [] },
-  { id: '3', label: 'Identifying key metrics', status: 'pending', progress: 0, logs: [] },
-  { id: '4', label: 'Validating SQL syntax', status: 'pending', progress: 0, logs: [] },
+const AGENT_THOUGHTS: string[] = [
+  "Initializing query and metrics generation agent...",
+  "Loading schema analysis and relationship data from previous steps",
+  "Analyzing business domain context and user personas",
+  "Identifying common analytical patterns and questions",
+  "Examining table structures for typical query patterns",
+  "Generating natural language question: 'What were our total sales last month?'",
+  "Constructing SQL query for monthly sales analysis",
+  "Generating natural language question: 'Which products are currently low in stock?'",
+  "Building inventory threshold query with product joins",
+  "Generating natural language question: 'Who are our top 10 customers by revenue?'",
+  "Creating customer lifetime value aggregation query",
+  "Scanning for numeric columns suitable for key metrics",
+  "Identified metric candidate: Total Revenue (SUM of order amounts)",
+  "Identified metric candidate: Average Order Value (AVG of order amounts)",
+  "Identified metric candidate: Active Customers (COUNT DISTINCT of recent customers)",
+  "Validating all SQL queries for syntax correctness",
+  "Checking column references against schema metadata",
+  "Verifying join conditions and foreign key relationships",
+  "All queries validated successfully. Generated 3 sample queries and 3 key metrics.",
 ];
-
-const TASK_LOGS: Record<string, string[]> = {
-  '1': [
-    'Loading data schema information...',
-    'Analyzing table relationships',
-    'Understanding business domain',
-    'Identifying common query patterns',
-    'Business context analysis complete',
-  ],
-  '2': [
-    'Generating natural language questions...',
-    'Created: "What were our total sales last month?"',
-    'Created: "Which products are currently low in stock?"',
-    'Created: "Who are our top 10 customers by revenue?"',
-    'Sample queries generated successfully',
-  ],
-  '3': [
-    'Scanning for numeric columns...',
-    'Found metric: Total Revenue',
-    'Found metric: Average Order Value',
-    'Found metric: Active Customers',
-    'Key metrics identified',
-  ],
-  '4': [
-    'Validating SQL queries...',
-    'Checking syntax for all queries',
-    'Verifying column references',
-    'All queries validated successfully',
-  ],
-};
-
-const TASK_DURATIONS: Record<string, string> = {
-  '1': '1.9s',
-  '2': '2.3s',
-  '3': '1.4s',
-  '4': '1.1s',
-};
 
 const MOCK_ITEMS: QueryOrMetricItem[] = [
   // Sample Queries
@@ -172,90 +146,61 @@ export function Step5SampleQueriesMetrics() {
 
   // Processing state
   const [isProcessing, setIsProcessing] = useState(true);
-  const [processingTasks, setProcessingTasks] = useState<ProcessingTask[]>(PROCESSING_TASKS);
-  const [currentTaskIndex, setCurrentTaskIndex] = useState(0);
+  const [logs, setLogs] = useState<ThinkingLog[]>([]);
   const [currentLogIndex, setCurrentLogIndex] = useState(0);
-  const [expandedTasks, setExpandedTasks] = useState<Set<string>>(new Set());
+  const [isComplete, setIsComplete] = useState(false);
+  const scrollRef = useRef<HTMLDivElement>(null);
 
-  // Processing logic (similar to Run Analysis)
+  // Auto-scroll to bottom when logs update
+  useEffect(() => {
+    if (scrollRef.current && logs.length > 0) {
+      const viewport = scrollRef.current.querySelector('[data-slot="scroll-area-viewport"]') as HTMLDivElement;
+      if (viewport) {
+        viewport.scrollTop = viewport.scrollHeight;
+      }
+    }
+  }, [logs]);
+
+  // Streaming agent thoughts
   useEffect(() => {
     if (!isProcessing) return;
-    
-    if (currentTaskIndex >= processingTasks.length) {
-      // All tasks complete, hide processing view
+
+    if (currentLogIndex >= AGENT_THOUGHTS.length) {
+      // Mark as complete
       setTimeout(() => {
-        setIsProcessing(false);
-      }, 1000);
+        setIsComplete(true);
+        // Hide processing view and show review interface
+        setTimeout(() => {
+          setIsProcessing(false);
+        }, 1000);
+      }, 500);
       return;
     }
 
-    const currentTask = processingTasks[currentTaskIndex];
-    const taskLogs = TASK_LOGS[currentTask.id] || [];
+    const delay = currentLogIndex === 0 ? 500 : 150;
+    
+    const timer = setTimeout(() => {
+      const newLog: ThinkingLog = {
+        id: `log-${currentLogIndex}`,
+        timestamp: new Date(),
+        message: AGENT_THOUGHTS[currentLogIndex],
+        type: currentLogIndex === AGENT_THOUGHTS.length - 1 ? 'complete' : 
+              currentLogIndex < 3 ? 'action' : 'thinking',
+      };
+      
+      setLogs((prev) => [...prev, newLog]);
+      setCurrentLogIndex((prev) => prev + 1);
 
-    // Start the current task
-    setProcessingTasks((prev) =>
-      prev.map((task, idx) =>
-        idx === currentTaskIndex ? { ...task, status: 'running' } : task
-      )
-    );
-
-    // Add logs progressively
-    if (currentLogIndex < taskLogs.length) {
-      const logInterval = setInterval(() => {
-        if (currentLogIndex < taskLogs.length) {
-          // Add log to task's logs array
-          setProcessingTasks((prev) =>
-            prev.map((task, idx) =>
-              idx === currentTaskIndex 
-                ? { ...task, logs: [...task.logs, taskLogs[currentLogIndex]] } 
-                : task
-            )
-          );
-          
-          setCurrentLogIndex((prev) => prev + 1);
-
-          // Update progress
-          const progress = ((currentLogIndex + 1) / taskLogs.length) * 100;
-          setProcessingTasks((prev) =>
-            prev.map((task, idx) =>
-              idx === currentTaskIndex ? { ...task, progress } : task
-            )
-          );
+      // Auto-scroll to bottom
+      setTimeout(() => {
+        if (scrollRef.current) {
+          scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
         }
-      }, 200);
+      }, 50);
+    }, delay);
 
-      return () => clearInterval(logInterval);
-    }
-
-    // Complete the task when all logs are done
-    if (currentLogIndex >= taskLogs.length) {
-      const completeTimeout = setTimeout(() => {
-        setProcessingTasks((prev) =>
-          prev.map((task, idx) =>
-            idx === currentTaskIndex 
-              ? { ...task, status: 'complete', progress: 100, duration: TASK_DURATIONS[task.id] } 
-              : task
-          )
-        );
-        setCurrentTaskIndex((prev) => prev + 1);
-        setCurrentLogIndex(0);
-      }, 400);
-
-      return () => clearTimeout(completeTimeout);
-    }
-  }, [currentTaskIndex, currentLogIndex, processingTasks.length, isProcessing]);
-
-  const toggleProcessingTask = (taskId: string) => {
-    setExpandedTasks((prev) => {
-      const newSet = new Set(prev);
-      if (newSet.has(taskId)) {
-        newSet.delete(taskId);
-      } else {
-        newSet.add(taskId);
-      }
-      return newSet;
-    });
-  };
+    return () => clearTimeout(timer);
+  }, [currentLogIndex, isProcessing]);
 
   const activeItem = items.find((i) => i.id === activeItemId);
 
@@ -280,7 +225,6 @@ export function Step5SampleQueriesMetrics() {
     setCompletedItems(new Set(completedItems).add(activeItemId));
     toast.success('Approved');
     
-    // Auto-move to next after a brief moment
     setTimeout(() => {
       moveToNextPending();
     }, 800);
@@ -298,7 +242,6 @@ export function Step5SampleQueriesMetrics() {
     setCompletedItems(new Set(completedItems).add(activeItemId));
     toast.success('Rejected');
     
-    // Auto-move to next after a brief moment
     setTimeout(() => {
       moveToNextPending();
     }, 800);
@@ -310,7 +253,6 @@ export function Step5SampleQueriesMetrics() {
 
   const handleEdit = () => {
     if (!activeItem) return;
-    // Reset to pending status to allow re-review
     setItems((prevItems) =>
       prevItems.map((item) =>
         item.id === activeItemId ? { ...item, status: 'pending' as const } : item
@@ -338,7 +280,6 @@ export function Step5SampleQueriesMetrics() {
   const handleChatConfirm = (value: string) => {
     if (!activeItem) return;
     
-    // Mark as modified
     setItems((prevItems) =>
       prevItems.map((item) =>
         item.id === activeItemId ? { ...item, status: 'modified' as const } : item
@@ -360,7 +301,6 @@ export function Step5SampleQueriesMetrics() {
       return;
     }
 
-    // Update the item with correct code
     setItems((prevItems) =>
       prevItems.map((item) =>
         item.id === activeItemId ? { ...item, sqlQuery: correctCode, status: 'modified' as const } : item
@@ -399,7 +339,7 @@ export function Step5SampleQueriesMetrics() {
     }));
     
     toast.success('Queries and metrics validated');
-    navigate('/agents/create/step-7'); // Now step 7 is Context Review
+    navigate('/agents/create/step-7');
   };
 
   const getStatusLabel = (status: string) => {
@@ -499,223 +439,63 @@ export function Step5SampleQueriesMetrics() {
                 setCodeEditorOpen(true);
               }}
               variant="outline"
-              className="w-full text-[#00B5B3] border-[#00B5B3] hover:bg-[#F0FFFE]"
-            >
-              <Code className="w-4 h-4 mr-2" />
-              Add Correct Code
-            </Button>
-          </div>
-        </div>
-      );
-    }
-
-    // Completed state - show status and task completed
-    if (completedItems.has(activeItemId)) {
-      return (
-        <div className="absolute inset-0 flex flex-col">
-          <div className="flex-1 overflow-y-auto pb-10">
-            <div className="px-[24px] py-[0px]">
-              <div className="py-6 pr-6">
-                <p className={`font-semibold text-sm ${getStatusColor(activeItem.status)} mb-1`}>
-                  {getStatusLabel(activeItem.status)}
-                </p>
-                <p className="font-semibold text-sm text-[#333333] mb-4">✅ Task Completed</p>
-                
-                {activeItem.type === 'query' ? (
-                  <div className="space-y-3">
-                    <div>
-                      <Label className="mb-2 block">Question</Label>
-                      <div className="bg-[#F8F9FA] border border-[#EEEEEE] rounded-lg p-3">
-                        <p className="text-sm text-[#333333]">{activeItem.question}</p>
-                      </div>
-                    </div>
-                    <div>
-                      <Label className="mb-2 block">AI Answer</Label>
-                      <div className="bg-[#F0FFFE] border border-[#00B5B3] rounded-lg p-3">
-                        <p className="text-sm text-[#333333]">{activeItem.aiAnswer}</p>
-                      </div>
-                    </div>
-                    {activeItem.sqlQuery && (
-                      <div>
-                        <Label className="mb-2 block">SQL Query</Label>
-                        <div className="rounded border border-[#E5E7EB] bg-[#F9FAFB]">
-                          <div className="flex items-center justify-between px-2.5 py-1.5 border-b border-[#E5E7EB]">
-                            <span className="text-xs text-[#6B7280]">query.sql</span>
-                          </div>
-                          <div className="p-2.5">
-                            <pre className="whitespace-pre-wrap font-mono text-xs leading-relaxed text-[#374151]">
-                              <span dangerouslySetInnerHTML={{ __html: highlightSql(activeItem.sqlQuery) }} />
-                            </pre>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                ) : (
-                  <div className="space-y-3">
-                    <div>
-                      <Label className="mb-2 block">Metric Name</Label>
-                      <div className="bg-[#F8F9FA] border border-[#EEEEEE] rounded-lg p-3">
-                        <p className="text-sm text-[#333333]">{activeItem.label}</p>
-                      </div>
-                    </div>
-                    <div>
-                      <Label className="mb-2 block">Current Value</Label>
-                      <div className="bg-[#F0FFFE] border border-[#00B5B3] rounded-lg p-3">
-                        <p className="text-xl text-[#00B5B3]">{activeItem.metricValue}</p>
-                        <p className="text-xs text-[#666666] mt-1">{activeItem.description}</p>
-                      </div>
-                    </div>
-                    {activeItem.sqlQuery && (
-                      <div>
-                        <Label className="mb-2 block">SQL Calculation</Label>
-                        <div className="rounded border border-[#E5E7EB] bg-[#F9FAFB]">
-                          <div className="flex items-center justify-between px-2.5 py-1.5 border-b border-[#E5E7EB]">
-                            <span className="text-xs text-[#6B7280]">metric.sql</span>
-                          </div>
-                          <div className="p-2.5">
-                            <pre className="whitespace-pre-wrap font-mono text-xs leading-relaxed text-[#374151]">
-                              <span dangerouslySetInnerHTML={{ __html: highlightSql(activeItem.sqlQuery) }} />
-                            </pre>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-
-          <div className="flex-shrink-0 border-t border-[#EEEEEE] p-4 bg-white">
-            <Button
-              onClick={handleEdit}
-              variant="outline"
               className="w-full"
             >
-              <Edit2 className="w-4 h-4 mr-2" />
-              Edit
+              <Code className="w-4 h-4 mr-2" />
+              Edit SQL Code
             </Button>
           </div>
         </div>
       );
     }
 
-    // Query display
-    if (activeItem.type === 'query') {
-      return (
-        <div className="absolute inset-0 overflow-y-auto flex flex-col">
-          <div className="flex-1 p-6 space-y-4">
-            <div>
-              <Label className="mb-2 block">Question</Label>
-              <div className="bg-[#F8F9FA] border border-[#EEEEEE] rounded-lg p-4">
-                <p className="text-sm text-[#333333]">{activeItem.question}</p>
-              </div>
-            </div>
-
-            <div>
-              <Label className="mb-2 block">AI Answer</Label>
-              <div className="bg-[#F0FFFE] border border-[#00B5B3] rounded-lg p-4">
-                <p className="text-sm text-[#333333]">{activeItem.aiAnswer}</p>
-              </div>
-            </div>
-
-            {/* SQL Query - Always Expanded */}
-            {activeItem.sqlQuery && (
-              <div>
-                <Label className="mb-2 block">SQL Query</Label>
-                <div className="rounded border border-[#E5E7EB] bg-[#F9FAFB]">
-                  <div className="flex items-center justify-between px-2.5 py-1.5 border-b border-[#E5E7EB]">
-                    <span className="text-xs text-[#6B7280]">query.sql</span>
-                  </div>
-                  <div className="p-2.5">
-                    <pre className="whitespace-pre-wrap font-mono text-xs leading-relaxed text-[#374151]">
-                      <span dangerouslySetInnerHTML={{ __html: highlightSql(activeItem.sqlQuery) }} />
-                    </pre>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Action Buttons */}
-            <div className="flex items-center justify-between pt-2">
-              <TooltipProvider delayDuration={200}>
-                <div className="flex items-center gap-2">
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <button
-                        onClick={handleApprove}
-                        className="w-7 h-7 rounded-full bg-[#E8F5E9] hover:bg-[#C8E6C9] flex items-center justify-center transition-colors"
-                      >
-                        <CheckCircle2 className="w-4 h-4 text-[#4CAF50]" />
-                      </button>
-                    </TooltipTrigger>
-                    <TooltipContent side="top" className="text-xs">
-                      Accept this query as correct
-                    </TooltipContent>
-                  </Tooltip>
-                  
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <button
-                        onClick={handleReject}
-                        className="w-7 h-7 rounded-full bg-[#FFEBEE] hover:bg-[#FFCDD2] flex items-center justify-center transition-colors"
-                      >
-                        <XCircle className="w-4 h-4 text-[#F04438]" />
-                      </button>
-                    </TooltipTrigger>
-                    <TooltipContent side="top" className="text-xs">
-                      Remove this query
-                    </TooltipContent>
-                  </Tooltip>
-                  
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <button
-                        onClick={handleModify}
-                        className="w-7 h-7 rounded-full bg-[#E0F7F7] hover:bg-[#B2EBF2] flex items-center justify-center transition-colors"
-                      >
-                        <MessageSquare className="w-4 h-4 text-[#00B5B3]" />
-                      </button>
-                    </TooltipTrigger>
-                    <TooltipContent side="top" className="text-xs">
-                      Chat with AI to modify this query
-                    </TooltipContent>
-                  </Tooltip>
-                </div>
-              </TooltipProvider>
-            </div>
-          </div>
-        </div>
-      );
-    }
-
-    // Metric display
+    // Normal mode
     return (
-      <div className="absolute inset-0 overflow-y-auto flex flex-col">
-        <div className="flex-1 p-6 space-y-4">
-          <div>
-            <Label className="mb-2 block">Metric Name</Label>
-            <div className="bg-[#F8F9FA] border border-[#EEEEEE] rounded-lg p-4">
-              <p className="text-sm text-[#333333]">{activeItem.label}</p>
-            </div>
+      <div className="p-6 space-y-6">
+        <div>
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-semibold text-[#111827]">{activeItem.label}</h3>
+            <Badge
+              variant="outline"
+              className={activeItem.status !== 'pending' ? getStatusColor(activeItem.status) : ''}
+            >
+              {activeItem.type === 'query' ? 'Sample Query' : 'Key Metric'}
+            </Badge>
           </div>
 
-          <div>
-            <Label className="mb-2 block">Current Value</Label>
-            <div className="bg-[#F0FFFE] border border-[#00B5B3] rounded-lg p-4">
-              <p className="text-2xl text-[#00B5B3]">{activeItem.metricValue}</p>
-              <p className="text-xs text-[#666666] mt-1">{activeItem.description}</p>
+          {activeItem.type === 'query' ? (
+            <div className="space-y-4">
+              <div>
+                <Label className="mb-2 block text-xs text-[#666666]">Question</Label>
+                <div className="bg-[#F8F9FA] border border-[#EEEEEE] rounded-lg p-3">
+                  <p className="text-sm text-[#333333]">{activeItem.question}</p>
+                </div>
+              </div>
+              <div>
+                <Label className="mb-2 block text-xs text-[#666666]">AI Answer</Label>
+                <div className="bg-[#F0FFFE] border border-[#00B5B3] rounded-lg p-3">
+                  <p className="text-sm text-[#333333]">{activeItem.aiAnswer}</p>
+                </div>
+              </div>
             </div>
-          </div>
-
-          {/* SQL Calculation - Always Expanded */}
-          {activeItem.sqlQuery && (
+          ) : (
             <div>
-              <Label className="mb-2 block">SQL Calculation</Label>
+              <Label className="mb-2 block text-xs text-[#666666]">Metric Value</Label>
+              <div className="bg-[#F0FFFE] border border-[#00B5B3] rounded-lg p-4">
+                <p className="text-2xl font-semibold text-[#00B5B3]">{activeItem.metricValue}</p>
+                <p className="text-sm text-[#666666] mt-1">{activeItem.description}</p>
+              </div>
+            </div>
+          )}
+
+          {activeItem.sqlQuery && (
+            <div className="mt-4">
+              <Label className="mb-2 block text-xs text-[#666666]">SQL Query</Label>
               <div className="rounded border border-[#E5E7EB] bg-[#F9FAFB]">
                 <div className="flex items-center justify-between px-2.5 py-1.5 border-b border-[#E5E7EB]">
-                  <span className="text-xs text-[#6B7280]">metric.sql</span>
+                  <span className="text-xs text-[#6B7280]">
+                    {activeItem.type === 'query' ? 'query.sql' : 'metric.sql'}
+                  </span>
                 </div>
                 <div className="p-2.5">
                   <pre className="whitespace-pre-wrap font-mono text-xs leading-relaxed text-[#374151]">
@@ -725,61 +505,79 @@ export function Step5SampleQueriesMetrics() {
               </div>
             </div>
           )}
+        </div>
 
-          {/* Action Buttons */}
-          <div className="flex items-center justify-between pt-2">
+        {/* Actions */}
+        {activeItem.status === 'pending' ? (
+          <div className="space-y-3">
             <TooltipProvider delayDuration={200}>
               <div className="flex items-center gap-2">
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <button
+                    <Button
                       onClick={handleApprove}
-                      className="w-7 h-7 rounded-full bg-[#E8F5E9] hover:bg-[#C8E6C9] flex items-center justify-center transition-colors"
+                      variant="outline"
+                      className="flex-1 border-[#4CAF50] text-[#4CAF50] hover:bg-[#E8F5E9] hover:text-[#4CAF50]"
                     >
-                      <CheckCircle2 className="w-4 h-4 text-[#4CAF50]" />
-                    </button>
+                      <CheckCircle2 className="w-4 h-4 mr-2" />
+                      Approve
+                    </Button>
                   </TooltipTrigger>
-                  <TooltipContent side="top" className="text-xs">
-                    Accept this metric as correct
+                  <TooltipContent>
+                    This {activeItem.type} is correct and ready to use
                   </TooltipContent>
                 </Tooltip>
-                
+
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <button
+                    <Button
                       onClick={handleReject}
-                      className="w-7 h-7 rounded-full bg-[#FFEBEE] hover:bg-[#FFCDD2] flex items-center justify-center transition-colors"
+                      variant="outline"
+                      className="flex-1 border-[#F04438] text-[#F04438] hover:bg-[#FEF3F2] hover:text-[#F04438]"
                     >
-                      <XCircle className="w-4 h-4 text-[#F04438]" />
-                    </button>
+                      <XCircle className="w-4 h-4 mr-2" />
+                      Reject
+                    </Button>
                   </TooltipTrigger>
-                  <TooltipContent side="top" className="text-xs">
-                    Remove this metric
-                  </TooltipContent>
-                </Tooltip>
-                
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <button
-                      onClick={handleModify}
-                      className="w-7 h-7 rounded-full bg-[#E0F7F7] hover:bg-[#B2EBF2] flex items-center justify-center transition-colors"
-                    >
-                      <MessageSquare className="w-4 h-4 text-[#00B5B3]" />
-                    </button>
-                  </TooltipTrigger>
-                  <TooltipContent side="top" className="text-xs">
-                    Chat with AI to modify this metric
+                  <TooltipContent>
+                    This {activeItem.type} is not useful or accurate
                   </TooltipContent>
                 </Tooltip>
               </div>
             </TooltipProvider>
+
+            <Button
+              onClick={handleModify}
+              variant="outline"
+              className="w-full border-[#00B5B3] text-[#00B5B3] hover:bg-[#E0F7F7] hover:text-[#00B5B3]"
+            >
+              <MessageSquare className="w-4 h-4 mr-2" />
+              Modify with AI
+            </Button>
           </div>
-        </div>
+        ) : (
+          <div className="space-y-3">
+            <div className="flex items-center justify-between p-3 bg-[#F8F9FA] rounded-lg">
+              <span className="text-sm text-[#666666]">Status:</span>
+              <span className={`text-sm font-medium ${getStatusColor(activeItem.status)}`}>
+                {getStatusLabel(activeItem.status)}
+              </span>
+            </div>
+            <Button
+              onClick={handleEdit}
+              variant="outline"
+              className="w-full"
+            >
+              <Edit2 className="w-4 h-4 mr-2" />
+              Edit Decision
+            </Button>
+          </div>
+        )}
       </div>
     );
   };
 
-  const allReviewed = completedItems.size >= items.length;
+  const progress = (currentLogIndex / AGENT_THOUGHTS.length) * 100;
 
   return (
     <WizardLayout
@@ -787,249 +585,151 @@ export function Step5SampleQueriesMetrics() {
       currentStep={6}
       totalSteps={8}
       onBack={() => navigate('/agents/create/step-5')}
-      onSaveDraft={() => {
-        localStorage.setItem(
-          'wizardDraft',
-          JSON.stringify({
-            step: 6,
-            items,
-            completedItems: Array.from(completedItems),
-          })
-        );
-        toast.success('Draft saved');
-      }}
     >
       {isProcessing ? (
-        // Processing View - Similar to Run Analysis
-        <div className="max-w-4xl mx-auto space-y-6 px-8">
-          {/* Header with Overall Progress */}
+        // Processing View - Agent Thinking
+        <div className="max-w-4xl mx-auto space-y-6">
+          {/* Header */}
           <Card className="p-6 border border-[#EEEEEE]">
-            <div className="flex items-start gap-4 mb-5">
+            <div className="flex items-start gap-4">
               <div className="w-12 h-12 bg-[#E0F7F7] rounded-lg flex items-center justify-center flex-shrink-0">
-                {currentTaskIndex < processingTasks.length ? (
-                  <Loader2 className="w-6 h-6 text-[#00B5B3] animate-spin" />
-                ) : (
+                {isComplete ? (
                   <CheckCircle2 className="w-6 h-6 text-[#00B98E]" />
+                ) : (
+                  <Brain className="w-6 h-6 text-[#00B5B3] animate-pulse" />
                 )}
               </div>
               <div className="flex-1">
                 <h2 className="text-lg font-semibold text-[#333333] mb-1">
-                  {currentTaskIndex < processingTasks.length ? 'Generating Queries & Metrics' : 'Processing Complete'}
+                  {isComplete ? 'Generation Complete' : 'Agent Thinking...'}
                 </h2>
                 <p className="text-sm text-[#666666]">
-                  {currentTaskIndex < processingTasks.length
-                    ? 'AI is analyzing your data to generate sample queries and identify key metrics'
-                    : 'All processing tasks completed successfully'
+                  {isComplete 
+                    ? 'AI has finished generating sample queries and identifying key metrics'
+                    : 'AI is creating sample queries and metrics based on your data structure'
                   }
                 </p>
+                
+                {/* Progress indicator */}
+                <div className="mt-4 flex items-center gap-3">
+                  <div className="flex-1 h-1.5 bg-[#F0F0F0] rounded-full overflow-hidden">
+                    <div 
+                      className="h-full bg-[#00B5B3] transition-all duration-300 ease-out"
+                      style={{ width: `${progress}%` }}
+                    />
+                  </div>
+                  <span className="text-xs font-medium text-[#00B5B3] min-w-[40px] text-right">
+                    {Math.round(progress)}%
+                  </span>
+                </div>
               </div>
-            </div>
-
-            {/* Overall Progress Bar */}
-            <div>
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-sm font-medium text-[#333333]">
-                  Overall Progress
-                </span>
-                <span className="text-sm font-semibold text-[#00B5B3]">
-                  {processingTasks.filter((t) => t.status === 'complete').length} of {processingTasks.length} complete
-                </span>
-              </div>
-              <Progress value={(processingTasks.filter((t) => t.status === 'complete').length / processingTasks.length) * 100} className="h-2.5" />
             </div>
           </Card>
 
-          {/* Processing Steps with Collapsible Logs */}
-          <ScrollArea className="h-[calc(100vh-380px)]">
-            <div className="space-y-3 pr-4">
-              {processingTasks.map((task, index) => (
-                <Card 
-                  key={task.id} 
-                  className={`border transition-all ${
-                    task.status === 'complete'
-                      ? 'border-[#00B98E] bg-[#F9FFFD]'
-                      : task.status === 'running'
-                      ? 'border-[#00B5B3] bg-[#F0FFFE]'
-                      : 'border-[#EEEEEE] bg-white'
-                  }`}
-                >
-                  <Collapsible
-                    open={expandedTasks.has(task.id)}
-                    onOpenChange={() => toggleProcessingTask(task.id)}
-                  >
-                    <CollapsibleTrigger className="w-full">
-                      <div className="p-4 flex items-center gap-3 hover:bg-black/[0.02] transition-colors">
-                        {/* Status Icon */}
-                        <div className="flex-shrink-0">
-                          {task.status === 'complete' ? (
-                            <CheckCircle2 className="w-5 h-5 text-[#00B98E]" />
-                          ) : task.status === 'running' ? (
-                            <Loader2 className="w-5 h-5 text-[#00B5B3] animate-spin" />
-                          ) : (
-                            <div className="w-5 h-5 rounded-full border-2 border-[#DDDDDD]" />
-                          )}
-                        </div>
-
-                        {/* Task Info */}
-                        <div className="flex-1 text-left">
-                          <div className="flex items-center gap-2 mb-1">
-                            <span className={`text-sm font-medium ${
-                              task.status === 'complete'
-                                ? 'text-[#00B98E]'
-                                : task.status === 'running'
-                                ? 'text-[#00B5B3]'
-                                : 'text-[#999999]'
-                            }`}>
-                              {task.label}
-                            </span>
-                            {task.status === 'complete' && task.duration && (
-                              <span className="text-xs text-[#999999]">• {task.duration}</span>
-                            )}
-                          </div>
-                          
-                          {task.status === 'running' && (
-                            <Progress value={task.progress} className="h-1 w-full" />
-                          )}
-                        </div>
-
-                        {/* Expand/Collapse Indicator */}
-                        <div className="flex items-center gap-2 flex-shrink-0">
-                          {task.logs.length > 0 && (
-                            <span className="text-xs text-[#999999]">
-                              {task.logs.length} events
-                            </span>
-                          )}
-                          {task.logs.length > 0 && (
-                            expandedTasks.has(task.id) ? (
-                              <ChevronDown className="w-4 h-4 text-[#666666]" />
-                            ) : (
-                              <ChevronRight className="w-4 h-4 text-[#666666]" />
-                            )
-                          )}
-                        </div>
-                      </div>
-                    </CollapsibleTrigger>
-
-                    {/* Collapsible Log Content */}
-                    {task.logs.length > 0 && (
-                      <CollapsibleContent>
-                        <div className="px-4 pb-4 border-t border-[#EEEEEE]/50 pt-3">
-                          <div className="flex items-center gap-2 mb-2">
-                            <Terminal className="w-3.5 h-3.5 text-[#999999]" />
-                            <span className="text-xs font-medium text-[#666666]">Execution Logs</span>
-                          </div>
-                          <div className="bg-[#FAFBFC] rounded-lg p-3 border border-[#EEEEEE]">
-                            <div className="space-y-1 font-mono text-xs">
-                              {task.logs.map((log, idx) => (
-                                <div 
-                                  key={idx}
-                                  className="text-[#666666] leading-relaxed"
-                                >
-                                  <span className="text-[#999999] mr-2">›</span>
-                                  {log}
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        </div>
-                      </CollapsibleContent>
-                    )}
-                  </Collapsible>
-                </Card>
-              ))}
-            </div>
-          </ScrollArea>
-        </div>
-      ) : (
-        // Main Review View
-        <div className="h-full flex flex-col">
-          {/* Two-Panel Layout */}
-          <div className="flex-1 overflow-hidden pb-[88px]">
-            <TwoPanelWizardLayout
-              items={panelItems}
-              activeItemId={activeItemId}
-              onItemClick={setActiveItemId}
-            >
-              {renderContent()}
-            </TwoPanelWizardLayout>
-          </div>
-
-          {/* Footer - Always show progress */}
-          <div className="fixed bottom-0 left-[280px] right-0 bg-white border-t border-[#EEEEEE] shadow-[0_-2px_8px_rgba(0,0,0,0.04)] z-40">
-            <div className="max-w-5xl mx-auto px-8 py-4">
-              <div className="flex items-center justify-between gap-6">
-                <div className="flex items-center gap-4">
-                  <div className="flex items-center gap-2">
-                    <div className="w-6 h-6 rounded-full bg-[#00B5B3] text-white flex items-center justify-center text-xs">
-                      {completedItems.size}
-                    </div>
-                    <span className="text-sm text-[#666666]">
-                      {completedItems.size}/{items.length} item{items.length !== 1 ? 's' : ''} reviewed
-                    </span>
-                  </div>
-                  {allReviewed && (
-                    <Badge
-                      variant="outline"
-                      className="bg-[#E8F5E9] text-[#4CAF50] border-[#4CAF50]"
-                    >
-                      <Check className="w-3 h-3 mr-1" />
-                      Ready to continue
-                    </Badge>
-                  )}
-                </div>
-                <Button
-                  onClick={handleContinue}
-                  className="bg-[#00B5B3] hover:bg-[#009996]"
-                  disabled={!allReviewed}
-                >
-                  Continue to Review & Publish
-                </Button>
+          {/* Agent Thinking Logs */}
+          <Card className="border border-[#EEEEEE] overflow-hidden">
+            <div className="p-4 border-b border-[#EEEEEE] bg-[#FAFBFC]">
+              <div className="flex items-center gap-2">
+                <Brain className="w-4 h-4 text-[#00B5B3]" />
+                <span className="text-sm font-medium text-[#333333]">Agent Reasoning</span>
+                <Badge variant="outline" className="text-xs ml-auto">
+                  {logs.length} thoughts
+                </Badge>
               </div>
             </div>
-          </div>
+            
+            <ScrollArea className="h-[calc(100vh-440px)]" ref={scrollRef}>
+              <div className="p-4 space-y-1 font-mono text-xs">
+                {logs.map((log, idx) => (
+                  <div 
+                    key={log.id}
+                    className={`py-1.5 px-3 rounded transition-all duration-200 ${
+                      log.type === 'complete' 
+                        ? 'bg-[#E8F5E9] text-[#2E7D32]' 
+                        : log.type === 'action'
+                        ? 'bg-[#E0F7F7] text-[#00796B]'
+                        : 'text-[#666666]'
+                    }`}
+                    style={{
+                      animation: `fadeIn 0.3s ease-out ${idx * 0.02}s both`
+                    }}
+                  >
+                    <span className="text-[#999999] mr-3 select-none">
+                      {String(idx + 1).padStart(2, '0')}
+                    </span>
+                    <span>{log.message}</span>
+                  </div>
+                ))}
+                
+                {/* Typing indicator */}
+                {!isComplete && currentLogIndex < AGENT_THOUGHTS.length && (
+                  <div className="py-1.5 px-3 text-[#999999] flex items-center gap-2">
+                    <span className="mr-3">{String(currentLogIndex + 1).padStart(2, '0')}</span>
+                    <Loader2 className="w-3 h-3 animate-spin" />
+                    <span>Processing...</span>
+                  </div>
+                )}
+              </div>
+            </ScrollArea>
+          </Card>
         </div>
+      ) : (
+        // Main Review Interface
+        <TwoPanelWizardLayout
+          leftPanelTitle="Queries & Metrics"
+          leftPanelSubtitle={`${completedItems.size} of ${items.length} reviewed`}
+          items={panelItems}
+          activeItemId={activeItemId}
+          onItemClick={setActiveItemId}
+          rightPanelContent={renderContent()}
+          onContinue={handleContinue}
+          continueDisabled={completedItems.size < items.length}
+        />
       )}
 
       {/* Code Editor Dialog */}
       <Dialog open={codeEditorOpen} onOpenChange={setCodeEditorOpen}>
         <DialogContent className="max-w-3xl">
           <DialogHeader>
-            <DialogTitle>Add Correct SQL Code</DialogTitle>
+            <DialogTitle>Edit SQL Code</DialogTitle>
             <DialogDescription>
-              Paste the correct SQL code below that should replace the current query or metric calculation.
+              Update the SQL query to match the correct implementation
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div>
-              <Label htmlFor="code-editor">SQL Code *</Label>
+              <Label className="mb-2 block">Correct SQL Code</Label>
               <Textarea
-                id="code-editor"
                 value={correctCode}
                 onChange={(e) => setCorrectCode(e.target.value)}
-                placeholder="SELECT * FROM..."
-                className="font-mono text-sm h-64 mt-2"
+                placeholder="Enter the correct SQL query..."
+                className="font-mono text-sm min-h-[200px]"
               />
             </div>
-            <div className="flex gap-3 justify-end">
-              <Button
-                variant="outline"
-                onClick={() => {
-                  setCodeEditorOpen(false);
-                  setCorrectCode('');
-                }}
-              >
+            <div className="flex gap-2 justify-end">
+              <Button variant="outline" onClick={() => setCodeEditorOpen(false)}>
                 Cancel
               </Button>
-              <Button
-                onClick={handleCodeSubmit}
-                className="bg-[#00B5B3] hover:bg-[#009996]"
-              >
-                Submit Code
+              <Button onClick={handleCodeSubmit} className="bg-[#00B5B3] hover:bg-[#00A5A3]">
+                Save Changes
               </Button>
             </div>
           </div>
         </DialogContent>
       </Dialog>
+
+      <style>{`
+        @keyframes fadeIn {
+          from {
+            opacity: 0;
+            transform: translateX(-4px);
+          }
+          to {
+            opacity: 1;
+            transform: translateX(0);
+          }
+        }
+      `}</style>
     </WizardLayout>
   );
 }

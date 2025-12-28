@@ -32,6 +32,8 @@ import {
   Mail,
   Globe,
   Lock,
+  PlayCircle,
+  Send,
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -314,15 +316,22 @@ const MOCK_SHARED_USERS: SharedUser[] = [
 export function AgentDetails() {
   const { agentId } = useParams();
   const navigate = useNavigate();
-  const user = useAuthStore((state) => state.user);
-  const [activeTab, setActiveTab] = useState('overview');
-  const [hasRelationships] = useState(MOCK_CONNECTIONS.length > 0);
-  const [showRelationshipBanner, setShowRelationshipBanner] = useState(!MOCK_CONNECTIONS.length);
+  const { user } = useAuthStore();
+
   const [showShareDialog, setShowShareDialog] = useState(false);
-  const [sharedUsers, setSharedUsers] = useState<SharedUser[]>(MOCK_SHARED_USERS);
+  const [agentVisibility, setAgentVisibility] = useState<'public' | 'private'>('private');
+  const [sharedUsers, setSharedUsers] = useState<any[]>([]);
   const [newUserEmail, setNewUserEmail] = useState('');
-  const [newUserRole, setNewUserRole] = useState<'editor' | 'viewer'>('viewer');
-  const [agentVisibility, setAgentVisibility] = useState<'public' | 'private'>('public');
+  const [newUserRole, setNewUserRole] = useState<'viewer' | 'editor'>('viewer');
+  
+  // New modal states
+  const [showConnectedAgentModal, setShowConnectedAgentModal] = useState(false);
+  const [showGoldenQueryModal, setShowGoldenQueryModal] = useState(false);
+  const [selectedConnection, setSelectedConnection] = useState<AgentConnection | null>(null);
+  const [selectedQuery, setSelectedQuery] = useState<SampleQuery | null>(null);
+  const [chatMode, setChatMode] = useState<'view' | 'edit'>('view');
+  const [activeTab, setActiveTab] = useState('overview');
+  const [showRelationshipBanner, setShowRelationshipBanner] = useState(MOCK_CONNECTIONS.length === 0);
 
   const canEditAgents = user ? hasPermission(user.role, 'canEditAgents') : false;
   const canDeleteAgents = user ? hasPermission(user.role, 'canDeleteAgents') : false;
@@ -897,29 +906,36 @@ export function AgentDetails() {
             </div>
 
             {USER_CONVERSATIONS.map((conv) => (
-              <Card key={conv.id} className="p-5 border border-[#EEEEEE]">
+              <Card 
+                key={conv.id} 
+                className="p-5 border border-[#EEEEEE] hover:border-[#00B5B3] transition-all cursor-pointer group"
+                onClick={() => navigate(`/chat?conversation=${conv.id}`)}
+              >
                 <div className="flex items-start justify-between mb-3">
                   <div className="flex items-center gap-2">
-                    <div className="w-8 h-8 rounded-full bg-[#E0F7F7] flex items-center justify-center">
-                      <Users className="w-4 h-4 text-[#00B5B3]" />
+                    <div className="w-8 h-8 rounded-full bg-[#E0F7F7] flex items-center justify-center group-hover:bg-[#00B5B3] transition-colors">
+                      <Users className="w-4 h-4 text-[#00B5B3] group-hover:text-white transition-colors" />
                     </div>
                     <div>
                       <p className="text-sm font-medium text-[#333333]">{conv.user}</p>
                       <p className="text-xs text-[#999999]">{conv.timestamp}</p>
                     </div>
                   </div>
-                  <Badge
-                    variant="outline"
-                    className={
-                      conv.satisfaction === 'positive'
-                        ? 'text-[#00B98E] border-[#00B98E]'
-                        : conv.satisfaction === 'neutral'
-                        ? 'text-[#F79009] border-[#F79009]'
-                        : 'text-[#F04438] border-[#F04438]'
-                    }
-                  >
-                    {conv.satisfaction === 'positive' ? '👍 Helpful' : conv.satisfaction === 'neutral' ? '😐 Neutral' : '👎 Not helpful'}
-                  </Badge>
+                  <div className="flex items-center gap-2">
+                    <Badge
+                      variant="outline"
+                      className={
+                        conv.satisfaction === 'positive'
+                          ? 'text-[#00B98E] border-[#00B98E]'
+                          : conv.satisfaction === 'neutral'
+                          ? 'text-[#F79009] border-[#F79009]'
+                          : 'text-[#F04438] border-[#F04438]'
+                      }
+                    >
+                      {conv.satisfaction === 'positive' ? '👍 Helpful' : conv.satisfaction === 'neutral' ? '😐 Neutral' : '👎 Not helpful'}
+                    </Badge>
+                    <ArrowRight className="w-4 h-4 text-[#999999] opacity-0 group-hover:opacity-100 transition-opacity" />
+                  </div>
                 </div>
 
                 <div className="space-y-3">
@@ -931,12 +947,16 @@ export function AgentDetails() {
                     <p className="text-sm text-[#333333] pl-5">{conv.question}</p>
                   </div>
 
-                  <div className="bg-[#F8F9FA] rounded p-3 border border-[#EEEEEE]">
+                  <div className="bg-[#F8F9FA] rounded p-3 border border-[#EEEEEE] group-hover:bg-[#E0F7F7] transition-colors">
                     <div className="flex items-center gap-2 mb-1.5">
                       <Activity className="w-3.5 h-3.5 text-[#00B5B3]" />
                       <span className="text-xs font-medium text-[#00B5B3]">Agent Response</span>
                     </div>
                     <p className="text-sm text-[#333333]">{conv.answer}</p>
+                  </div>
+                  
+                  <div className="text-xs text-[#00B5B3] group-hover:underline pt-2">
+                    Click to view full conversation →
                   </div>
                 </div>
               </Card>

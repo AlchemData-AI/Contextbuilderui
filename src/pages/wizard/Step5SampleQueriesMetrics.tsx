@@ -140,16 +140,22 @@ export function Step5SampleQueriesMetrics() {
   const [items, setItems] = useState(MOCK_ITEMS);
   const [activeItemId, setActiveItemId] = useState(MOCK_ITEMS[0].id);
   const [completedItems, setCompletedItems] = useState<Set<string>>(new Set());
-  const [showChat, setShowChat] = useState(false);
+  const [showChat, setShowChat] = useState(true); // Default to chat mode
   const [codeEditorOpen, setCodeEditorOpen] = useState(false);
   const [correctCode, setCorrectCode] = useState('');
 
   // Processing state
-  const [isProcessing, setIsProcessing] = useState(true);
+  const [isProcessing, setIsProcessing] = useState(false); // Set to false to skip processing animation by default
   const [logs, setLogs] = useState<ThinkingLog[]>([]);
   const [currentLogIndex, setCurrentLogIndex] = useState(0);
   const [isComplete, setIsComplete] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  // Skip processing if needed (for testing)
+  const skipProcessing = () => {
+    setIsComplete(true);
+    setIsProcessing(false);
+  };
 
   // Auto-scroll to bottom when logs update
   useEffect(() => {
@@ -273,7 +279,7 @@ export function Step5SampleQueriesMetrics() {
     
     if (nextPending) {
       setActiveItemId(nextPending.id);
-      setShowChat(false);
+      setShowChat(true); // Keep chat mode as default
     }
   };
 
@@ -369,7 +375,14 @@ export function Step5SampleQueriesMetrics() {
   };
 
   const renderContent = () => {
-    if (!activeItem) return null;
+    if (!activeItem) {
+      console.log('No active item found. activeItemId:', activeItemId, 'items:', items);
+      return (
+        <div className="p-6 flex items-center justify-center h-full">
+          <p className="text-sm text-[#666666]">No item selected</p>
+        </div>
+      );
+    }
 
     // Chat mode
     if (showChat) {
@@ -451,128 +464,130 @@ export function Step5SampleQueriesMetrics() {
 
     // Normal mode
     return (
-      <div className="p-6 space-y-6">
-        <div>
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-semibold text-[#111827]">{activeItem.label}</h3>
-            <Badge
-              variant="outline"
-              className={activeItem.status !== 'pending' ? getStatusColor(activeItem.status) : ''}
-            >
-              {activeItem.type === 'query' ? 'Sample Query' : 'Key Metric'}
-            </Badge>
+      <div className="absolute inset-0 overflow-y-auto">
+        <div className="p-6 space-y-6">
+          <div>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-[#111827]">{activeItem.label}</h3>
+              <Badge
+                variant="outline"
+                className={activeItem.status !== 'pending' ? getStatusColor(activeItem.status) : ''}
+              >
+                {activeItem.type === 'query' ? 'Sample Query' : 'Key Metric'}
+              </Badge>
+            </div>
+
+            {activeItem.type === 'query' ? (
+              <div className="space-y-4">
+                <div>
+                  <Label className="mb-2 block text-xs text-[#666666]">Question</Label>
+                  <div className="bg-[#F8F9FA] border border-[#EEEEEE] rounded-lg p-3">
+                    <p className="text-sm text-[#333333]">{activeItem.question}</p>
+                  </div>
+                </div>
+                <div>
+                  <Label className="mb-2 block text-xs text-[#666666]">AI Answer</Label>
+                  <div className="bg-[#F0FFFE] border border-[#00B5B3] rounded-lg p-3">
+                    <p className="text-sm text-[#333333]">{activeItem.aiAnswer}</p>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div>
+                <Label className="mb-2 block text-xs text-[#666666]">Metric Value</Label>
+                <div className="bg-[#F0FFFE] border border-[#00B5B3] rounded-lg p-4">
+                  <p className="text-2xl font-semibold text-[#00B5B3]">{activeItem.metricValue}</p>
+                  <p className="text-sm text-[#666666] mt-1">{activeItem.description}</p>
+                </div>
+              </div>
+            )}
+
+            {activeItem.sqlQuery && (
+              <div className="mt-4">
+                <Label className="mb-2 block text-xs text-[#666666]">SQL Query</Label>
+                <div className="rounded border border-[#E5E7EB] bg-[#F9FAFB]">
+                  <div className="flex items-center justify-between px-2.5 py-1.5 border-b border-[#E5E7EB]">
+                    <span className="text-xs text-[#6B7280]">
+                      {activeItem.type === 'query' ? 'query.sql' : 'metric.sql'}
+                    </span>
+                  </div>
+                  <div className="p-2.5">
+                    <pre className="whitespace-pre-wrap font-mono text-xs leading-relaxed text-[#374151]">
+                      <span dangerouslySetInnerHTML={{ __html: highlightSql(activeItem.sqlQuery) }} />
+                    </pre>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
 
-          {activeItem.type === 'query' ? (
-            <div className="space-y-4">
-              <div>
-                <Label className="mb-2 block text-xs text-[#666666]">Question</Label>
-                <div className="bg-[#F8F9FA] border border-[#EEEEEE] rounded-lg p-3">
-                  <p className="text-sm text-[#333333]">{activeItem.question}</p>
+          {/* Actions */}
+          {activeItem.status === 'pending' ? (
+            <div className="space-y-3">
+              <TooltipProvider delayDuration={200}>
+                <div className="flex items-center gap-2">
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        onClick={handleApprove}
+                        variant="outline"
+                        className="flex-1 border-[#4CAF50] text-[#4CAF50] hover:bg-[#E8F5E9] hover:text-[#4CAF50]"
+                      >
+                        <CheckCircle2 className="w-4 h-4 mr-2" />
+                        Approve
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      This {activeItem.type} is correct and ready to use
+                    </TooltipContent>
+                  </Tooltip>
+
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        onClick={handleReject}
+                        variant="outline"
+                        className="flex-1 border-[#F04438] text-[#F04438] hover:bg-[#FEF3F2] hover:text-[#F04438]"
+                      >
+                        <XCircle className="w-4 h-4 mr-2" />
+                        Reject
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      This {activeItem.type} is not useful or accurate
+                    </TooltipContent>
+                  </Tooltip>
                 </div>
-              </div>
-              <div>
-                <Label className="mb-2 block text-xs text-[#666666]">AI Answer</Label>
-                <div className="bg-[#F0FFFE] border border-[#00B5B3] rounded-lg p-3">
-                  <p className="text-sm text-[#333333]">{activeItem.aiAnswer}</p>
-                </div>
-              </div>
+              </TooltipProvider>
+
+              <Button
+                onClick={handleModify}
+                variant="outline"
+                className="w-full border-[#00B5B3] text-[#00B5B3] hover:bg-[#E0F7F7] hover:text-[#00B5B3]"
+              >
+                <MessageSquare className="w-4 h-4 mr-2" />
+                Modify with AI
+              </Button>
             </div>
           ) : (
-            <div>
-              <Label className="mb-2 block text-xs text-[#666666]">Metric Value</Label>
-              <div className="bg-[#F0FFFE] border border-[#00B5B3] rounded-lg p-4">
-                <p className="text-2xl font-semibold text-[#00B5B3]">{activeItem.metricValue}</p>
-                <p className="text-sm text-[#666666] mt-1">{activeItem.description}</p>
+            <div className="space-y-3">
+              <div className="flex items-center justify-between p-3 bg-[#F8F9FA] rounded-lg">
+                <span className="text-sm text-[#666666]">Status:</span>
+                <span className={`text-sm font-medium ${getStatusColor(activeItem.status)}`}>
+                  {getStatusLabel(activeItem.status)}
+                </span>
               </div>
-            </div>
-          )}
-
-          {activeItem.sqlQuery && (
-            <div className="mt-4">
-              <Label className="mb-2 block text-xs text-[#666666]">SQL Query</Label>
-              <div className="rounded border border-[#E5E7EB] bg-[#F9FAFB]">
-                <div className="flex items-center justify-between px-2.5 py-1.5 border-b border-[#E5E7EB]">
-                  <span className="text-xs text-[#6B7280]">
-                    {activeItem.type === 'query' ? 'query.sql' : 'metric.sql'}
-                  </span>
-                </div>
-                <div className="p-2.5">
-                  <pre className="whitespace-pre-wrap font-mono text-xs leading-relaxed text-[#374151]">
-                    <span dangerouslySetInnerHTML={{ __html: highlightSql(activeItem.sqlQuery) }} />
-                  </pre>
-                </div>
-              </div>
+              <Button
+                onClick={handleEdit}
+                variant="outline"
+                className="w-full"
+              >
+                <Edit2 className="w-4 h-4 mr-2" />
+                Edit Decision
+              </Button>
             </div>
           )}
         </div>
-
-        {/* Actions */}
-        {activeItem.status === 'pending' ? (
-          <div className="space-y-3">
-            <TooltipProvider delayDuration={200}>
-              <div className="flex items-center gap-2">
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      onClick={handleApprove}
-                      variant="outline"
-                      className="flex-1 border-[#4CAF50] text-[#4CAF50] hover:bg-[#E8F5E9] hover:text-[#4CAF50]"
-                    >
-                      <CheckCircle2 className="w-4 h-4 mr-2" />
-                      Approve
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    This {activeItem.type} is correct and ready to use
-                  </TooltipContent>
-                </Tooltip>
-
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      onClick={handleReject}
-                      variant="outline"
-                      className="flex-1 border-[#F04438] text-[#F04438] hover:bg-[#FEF3F2] hover:text-[#F04438]"
-                    >
-                      <XCircle className="w-4 h-4 mr-2" />
-                      Reject
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    This {activeItem.type} is not useful or accurate
-                  </TooltipContent>
-                </Tooltip>
-              </div>
-            </TooltipProvider>
-
-            <Button
-              onClick={handleModify}
-              variant="outline"
-              className="w-full border-[#00B5B3] text-[#00B5B3] hover:bg-[#E0F7F7] hover:text-[#00B5B3]"
-            >
-              <MessageSquare className="w-4 h-4 mr-2" />
-              Modify with AI
-            </Button>
-          </div>
-        ) : (
-          <div className="space-y-3">
-            <div className="flex items-center justify-between p-3 bg-[#F8F9FA] rounded-lg">
-              <span className="text-sm text-[#666666]">Status:</span>
-              <span className={`text-sm font-medium ${getStatusColor(activeItem.status)}`}>
-                {getStatusLabel(activeItem.status)}
-              </span>
-            </div>
-            <Button
-              onClick={handleEdit}
-              variant="outline"
-              className="w-full"
-            >
-              <Edit2 className="w-4 h-4 mr-2" />
-              Edit Decision
-            </Button>
-          </div>
-        )}
       </div>
     );
   };
@@ -638,7 +653,7 @@ export function Step5SampleQueriesMetrics() {
               </div>
             </div>
             
-            <ScrollArea className="h-[calc(100vh-440px)]" ref={scrollRef}>
+            <ScrollArea className="h-[calc(100vh-520px)]" ref={scrollRef}>
               <div className="p-4 space-y-1 font-mono text-xs">
                 {logs.map((log, idx) => (
                   <div 
@@ -675,16 +690,50 @@ export function Step5SampleQueriesMetrics() {
         </div>
       ) : (
         // Main Review Interface
-        <TwoPanelWizardLayout
-          leftPanelTitle="Queries & Metrics"
-          leftPanelSubtitle={`${completedItems.size} of ${items.length} reviewed`}
-          items={panelItems}
-          activeItemId={activeItemId}
-          onItemClick={setActiveItemId}
-          rightPanelContent={renderContent()}
-          onContinue={handleContinue}
-          continueDisabled={completedItems.size < items.length}
-        />
+        <div className="h-full flex flex-col">
+          <div className="flex-1 min-h-0">
+            <TwoPanelWizardLayout
+              items={panelItems}
+              activeItemId={activeItemId}
+              onItemClick={setActiveItemId}
+            >
+              {renderContent()}
+            </TwoPanelWizardLayout>
+          </div>
+
+          {/* Footer - Always show progress */}
+          <div className="fixed bottom-0 left-[280px] right-0 bg-white border-t border-[#EEEEEE] shadow-[0_-2px_8px_rgba(0,0,0,0.04)] z-40">
+            <div className="max-w-5xl mx-auto px-8 py-4">
+              <div className="flex items-center justify-between gap-6">
+                <div className="flex items-center gap-4">
+                  <div className="flex items-center gap-2">
+                    <div className="w-6 h-6 rounded-full bg-[#00B5B3] text-white flex items-center justify-center text-xs">
+                      {completedItems.size}
+                    </div>
+                    <span className="text-sm text-[#666666]">
+                      {completedItems.size}/{items.length} items reviewed
+                    </span>
+                  </div>
+                  {completedItems.size === items.length && (
+                    <Badge variant="outline" className="bg-[#E8F5E9] text-[#4CAF50] border-[#4CAF50]">
+                      <CheckCircle2 className="w-3 h-3 mr-1" />
+                      Ready to continue
+                    </Badge>
+                  )}
+                </div>
+
+                <Button
+                  onClick={handleContinue}
+                  disabled={completedItems.size < items.length}
+                  className="bg-[#00B5B3] hover:bg-[#00A5A3] text-white disabled:bg-[#CCCCCC] disabled:text-[#999999] disabled:cursor-not-allowed"
+                >
+                  Continue
+                  <ChevronRight className="ml-2 w-4 h-4" />
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Code Editor Dialog */}

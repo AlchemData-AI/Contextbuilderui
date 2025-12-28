@@ -23,6 +23,7 @@ import {
   User,
   PanelLeftClose,
   PanelLeft,
+  BarChart3,
 } from 'lucide-react';
 import { Logo } from './Logo';
 import { useAuthStore } from '../lib/authStore';
@@ -56,6 +57,7 @@ interface NavItem {
 
 const NAV_ITEMS: NavItem[] = [
   { id: 'agents', label: 'Agents', icon: Database, path: '/agents' },
+  { id: 'dashboard', label: 'Dashboard', icon: BarChart3, path: '/dashboard' },
   { id: 'chats', label: 'Chats', icon: MessageSquare, path: '/chat/dashboard' },
   { id: 'rules', label: 'Rules', icon: FileText, path: '/rules' },
   { id: 'sql', label: 'SQL Workbench', icon: Code, path: '/sql-workbench' },

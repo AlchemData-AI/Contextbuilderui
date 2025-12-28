@@ -27,6 +27,8 @@ import { ChatWelcome } from './pages/ChatWelcome';
 import { Rules } from './pages/Rules';
 import SQLWorkbench from './pages/SQLWorkbench';
 import DataCatalog from './pages/DataCatalog';
+import DashboardHome from './pages/DashboardHome';
+import DashboardDetail from './pages/DashboardDetail';
 import { useAuthStore } from './lib/authStore';
 import { ProtectedRoute } from './components/ProtectedRoute';
 
@@ -102,6 +104,10 @@ export default function App() {
           {/* Agent Routes */}
           <Route path="agents" element={<AgentsDashboard />} />
           <Route path="agents/:agentId" element={<AgentDetails />} />
+
+          {/* Dashboard Routes */}
+          <Route path="dashboard" element={<DashboardHome />} />
+          <Route path="dashboard/:dashboardId" element={<DashboardDetail />} />
 
           {/* Other Routes */}
           <Route path="rules" element={<Rules />} />

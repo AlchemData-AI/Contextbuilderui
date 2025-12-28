@@ -136,6 +136,7 @@ interface Message {
   isStreaming?: boolean;
   streamingContent?: string;
   isAnalysisMode?: boolean;
+  isContextReference?: boolean; // For dashboard deep dive context
   
   // Thinking phase (before analysis plan)
   showThinking?: boolean;
@@ -350,6 +351,15 @@ export function AgenticChat() {
     approveQuery: approveQueryInStore
   } = useConversationStore();
 
+  // Parse URL parameters for dashboard deep dive context
+  const searchParams = new URLSearchParams(location.search);
+  const contextType = searchParams.get('context'); // 'metric', 'table', 'insight', 'dashboard'
+  const contextQuestion = searchParams.get('question');
+  const dashboardId = searchParams.get('dashboard');
+  const metricId = searchParams.get('metric');
+  const tableId = searchParams.get('table');
+  const insightId = searchParams.get('id');
+
   // Use conversationId from URL params if available, otherwise default to 'new'
   const [currentConvId, setCurrentConvId] = useState(conversationId || 'new');
   const [messages, setMessages] = useState<Message[]>([]);
@@ -462,6 +472,97 @@ export function AgenticChat() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [conversationId]);
+
+  // Handle dashboard deep dive context - add reference message and auto-populate question
+  useEffect(() => {
+    const deepdiveType = searchParams.get('deepdive');
+    
+    // Handle new deep dive flow
+    if (deepdiveType === 'metric' && currentConvId === 'new' && messages.length === 0) {
+      try {
+        // Get data from sessionStorage
+        const storedData = sessionStorage.getItem('deepdive_metric_data');
+        if (!storedData) {
+          console.error('No deep dive data found in sessionStorage');
+          return;
+        }
+        
+        const metricData = JSON.parse(storedData);
+        
+        // Clear sessionStorage after reading
+        sessionStorage.removeItem('deepdive_metric_data');
+        
+        // Collapse the sidebar for better focus
+        setIsCollapsed(true);
+        
+        // Create a visual context reference card
+        const contextCard: Message = {
+          id: 'context-' + Date.now(),
+          role: 'assistant',
+          content: `📊 **Dashboard Context**\n\n**${metricData.title}**\n${metricData.value} (${metricData.change} ${metricData.changeLabel})\n\n${metricData.insight || ''}`,
+          timestamp: new Date(),
+          isContextReference: true,
+        };
+        
+        // Create user's deep dive message with summary
+        const userMessage: Message = {
+          id: 'user-deepdive-' + Date.now(),
+          role: 'user',
+          content: `I want to deep-dive into this`,
+          timestamp: new Date(),
+        };
+        
+        setMessages([contextCard, userMessage]);
+        
+        // Trigger agent response
+        setTimeout(() => {
+          simulateDeepDiveResponse(metricData, [contextCard, userMessage]);
+        }, 500);
+        
+        // Clean URL
+        navigate(location.pathname, { replace: true });
+      } catch (error) {
+        console.error('Failed to parse deep dive data:', error);
+      }
+      return;
+    }
+    
+    // Handle old deep dive flow (legacy)
+    if (contextQuestion && currentConvId === 'new' && messages.length === 0) {
+      // Build context reference message
+      let contextMessage = '';
+      if (contextType === 'metric') {
+        contextMessage = `📊 Deep diving from Dashboard: ${dashboardId || 'Dashboard'} → Metric Analysis`;
+      } else if (contextType === 'table') {
+        contextMessage = `📊 Deep diving from Dashboard: ${dashboardId || 'Dashboard'} → Table Analysis`;
+      } else if (contextType === 'insight') {
+        contextMessage = `📊 Deep diving from Dashboard: AI Insight`;
+      } else if (contextType === 'dashboard') {
+        contextMessage = `📊 Deep diving from Dashboard: ${dashboardId || 'Dashboard'}`;
+      }
+
+      if (contextMessage) {
+        // Add reference as a system-style message
+        const referenceMsg: Message = {
+          id: 'context-ref-' + Date.now(),
+          role: 'assistant',
+          content: contextMessage,
+          timestamp: new Date(),
+          isContextReference: true,
+        };
+        setMessages([referenceMsg]);
+      }
+
+      // Set the question in the input and mark for auto-send
+      const decodedQuestion = decodeURIComponent(contextQuestion);
+      setInput(decodedQuestion);
+      shouldAutoSendRef.current = true;
+
+      // Clean URL parameters
+      navigate(location.pathname, { replace: true });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [contextQuestion, contextType, currentConvId]);
 
   // ═══════════════════════════════════════════════════════════════
   // HANDLERS
@@ -619,6 +720,81 @@ export function AgenticChat() {
     if (assistantMessage && conversationId !== 'new') {
       addMessageToStore(conversationId, assistantMessage as any);
     }
+  };
+
+  // Handle deep dive response with intelligent insights
+  const simulateDeepDiveResponse = async (metricData: any, currentMessages: Message[]) => {
+    setIsProcessing(true);
+    setIsCenteredMode(false);
+    
+    const baseId = Date.now();
+    const assistantMsgId = (baseId + 1).toString();
+    
+    const assistantMsg: Message = {
+      id: assistantMsgId,
+      role: 'assistant',
+      content: '',
+      streamingContent: '',
+      isStreaming: true,
+      timestamp: new Date(),
+    };
+
+    const updatedMessages = [...currentMessages, assistantMsg];
+    setMessages(updatedMessages);
+
+    // Generate intelligent response based on metric data
+    let responseText = `Sure, I can help you with that! `;
+    
+    // Add context-specific observations
+    const changeNum = parseFloat(metricData.change);
+    if (changeNum < 0) {
+      responseText += `I notice that ${metricData.title} has **declined by ${Math.abs(changeNum)}%** ${metricData.changeLabel}. `;
+      
+      // Add specific insights based on breakdown
+      if (metricData.breakdown && metricData.breakdown.length > 0) {
+        const specificDetail = metricData.breakdown[metricData.breakdown.length - 1];
+        responseText += `We recently observed that **${specificDetail.label}** is at **${specificDetail.value}**. `;
+      }
+      
+      responseText += `\\n\\n**Did you have something specific in mind?** For example:\\n`;
+      responseText += `• What's driving the decline?\\n`;
+      responseText += `• Compare with historical trends\\n`;
+      responseText += `• Identify opportunities for improvement\\n`;
+      responseText += `• Analyze by segments or cohorts`;
+    } else {
+      responseText += `Looking at ${metricData.title}, I can see strong positive momentum with **${changeNum}%** growth ${metricData.changeLabel}! `;
+      
+      // Add specific insights from breakdown
+      if (metricData.breakdown && metricData.breakdown.length > 0) {
+        const topPerformer = metricData.breakdown[0];
+        responseText += `We recently observed that **${topPerformer.label}** is performing well at **${topPerformer.value}**. `;
+      }
+      
+      responseText += `\\n\\n**Did you have something specific in mind?** For example:\\n`;
+      responseText += `• What's driving this growth?\\n`;
+      responseText += `• Forecast future performance\\n`;
+      responseText += `• Identify expansion opportunities\\n`;
+      responseText += `• Analyze best-performing segments`;
+    }
+
+    await streamText(responseText, (chunk) => {
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === assistantMsgId
+            ? { ...m, streamingContent: chunk }
+            : m
+        )
+      );
+    }, 20);
+
+    const finalMessages = updatedMessages.map((m) =>
+      m.id === assistantMsgId
+        ? { ...m, content: responseText, isStreaming: false, streamingContent: '' }
+        : m
+    );
+
+    setMessages(finalMessages);
+    setIsProcessing(false);
   };
 
   // DEMO: Regular chat with streaming failure
